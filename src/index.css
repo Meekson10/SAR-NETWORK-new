@@ -1,0 +1,17 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+```
+
+### Summary of what your folder should look like:
+```text
+sar-website/
+├── index.html
+├── package.json
+├── vite.config.js
+├── tailwind.config.js
+├── postcss.config.js
+└── src/
+    ├── App.jsx
+    ├── main.jsx
+    └── index.css
