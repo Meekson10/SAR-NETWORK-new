@@ -1,31 +1,494 @@
-{
-  "name": "sar-website",
-  "private": true,
-  "version": "0.0.0",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "firebase": "^10.8.0",
-    "lucide-react": "^0.292.0",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0"
-  },
-  "devDependencies": {
-    "@types/react": "^18.2.37",
-    "@types/react-dom": "^18.2.15",
-    "@vitejs/plugin-react": "^4.2.0",
-    "autoprefixer": "^10.4.16",
-    "eslint": "^8.53.0",
-    "eslint-plugin-react": "^7.33.2",
-    "eslint-plugin-react-hooks": "^4.6.0",
-    "eslint-plugin-react-refresh": "^0.4.4",
-    "postcss": "^8.4.31",
-    "tailwindcss": "^3.3.5",
-    "vite": "^5.0.0"
+import React, { useState, useEffect } from 'react';
+
+// --- FIREBASE IMPORTS & SETUP ---
+import { initializeApp } from "firebase/app";
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
+import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCgziMzaC5NUX2_Yru_pEwI-UjG3b4BdHM",
+  authDomain: "sar-network.firebaseapp.com",
+  projectId: "sar-network",
+  storageBucket: "sar-network.firebasestorage.app",
+  messagingSenderId: "978015332251",
+  appId: "1:978015332251:web:45daf350fdf061c59a233e",
+  measurementId: "G-0T4CE4FPEW"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+
+// --- BUILT-IN ICONS ---
+const IconWrapper = ({ children, className }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>
+);
+
+const Icons = {
+  Phone: (p) => <IconWrapper {...p}><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></IconWrapper>,
+  MapPin: (p) => <IconWrapper {...p}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></IconWrapper>,
+  Clock: (p) => <IconWrapper {...p}><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></IconWrapper>,
+  Briefcase: (p) => <IconWrapper {...p}><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></IconWrapper>,
+  Menu: (p) => <IconWrapper {...p}><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></IconWrapper>,
+  X: (p) => <IconWrapper {...p}><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></IconWrapper>,
+  CheckCircle: (p) => <IconWrapper {...p}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></IconWrapper>,
+  AlertTriangle: (p) => <IconWrapper {...p}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></IconWrapper>,
+  Truck: (p) => <IconWrapper {...p}><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></IconWrapper>,
+  Key: (p) => <IconWrapper {...p}><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path></IconWrapper>,
+  Battery: (p) => <IconWrapper {...p}><rect x="1" y="6" width="18" height="12" rx="2" ry="2"></rect><line x1="23" y1="13" x2="23" y2="11"></line></IconWrapper>,
+  Fuel: (p) => <IconWrapper {...p}><line x1="3" y1="22" x2="15" y2="22"></line><line x1="5" y1="17" x2="5" y2="11"></line><path d="M11 17l-5-5"></path><path d="M14 12h-2v9"></path><path d="M4 11V5a3 3 0 0 1 3-3 2 2 0 0 1 2 2v2"></path><path d="M18 20a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"></path><path d="M18 14v-4a2 2 0 0 0-2-2h-3"></path></IconWrapper>,
+  User: (p) => <IconWrapper {...p}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></IconWrapper>,
+  LogOut: (p) => <IconWrapper {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></IconWrapper>,
+  ChevronRight: (p) => <IconWrapper {...p}><polyline points="9 18 15 12 9 6"></polyline></IconWrapper>,
+  Star: (p) => <IconWrapper {...p}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></IconWrapper>,
+  Shield: (p) => <IconWrapper {...p}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></IconWrapper>,
+  Users: (p) => <IconWrapper {...p}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></IconWrapper>,
+  History: (p) => <IconWrapper {...p}><path d="M3 3v5h5"></path><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"></path><path d="M12 7v5l3 3"></path></IconWrapper>,
+  Upload: (p) => <IconWrapper {...p}><path d="M21 15v4a2 2 0 0 1-2-2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></IconWrapper>,
+  ArrowLeft: (p) => <IconWrapper {...p}><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></IconWrapper>,
+  Calendar: (p) => <IconWrapper {...p}><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></IconWrapper>,
+  CreditCard: (p) => <IconWrapper {...p}><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></IconWrapper>,
+  Palmtree: (p) => <IconWrapper {...p}><path d="M13 8c0-2.76-2.46-5-5.5-5S2 5.24 2 8h2c0-1.66 1.57-3 3.5-3S11 6.34 11 8h2z"></path><path d="M13 7.14A5.82 5.82 0 0 1 16.5 6c3.04 0 5.5 2.24 5.5 5h-2c0-1.66-1.57-3-3.5-3s-3.5 1.34-3.5 3c0 .2.02.4.05.58"></path><path d="M5.8 9.51A4.09 4.09 0 0 1 8.5 9c2.21 0 4 1.79 4 4h-2c0-1.1-.9-2-2-2s-2 .9-2 2H4.7c0-1.39.42-2.68 1.1-3.49"></path><path d="M18 22h-6.5a2 2 0 0 1-2-2v-7"></path><path d="M13 13.06A4.55 4.55 0 0 1 15.5 13c2.21 0 4 1.79 4 4h-2c0-1.1-.9-2-2-2a2 2 0 0 0-2 2h-2.5c0-1.64.6-3.16 1.6-4.14"></path></IconWrapper>,
+  Thermometer: (p) => <IconWrapper {...p}><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"></path></IconWrapper>,
+  Save: (p) => <IconWrapper {...p}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></IconWrapper>
+};
+
+// --- Custom Logo Component ---
+const SarLogo = ({ className = "h-12 w-12" }) => (
+  <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="50" cy="50" r="40" stroke="#2C3E50" strokeWidth="6" />
+    <ellipse cx="50" cy="50" rx="40" ry="15" stroke="#2C3E50" strokeWidth="4" fill="none" />
+    <path d="M50 10 V90" stroke="#2C3E50" strokeWidth="4" />
+    <path d="M20 30 Q50 30 80 30" stroke="#2C3E50" strokeWidth="4" fill="none" />
+    <path d="M20 70 Q50 70 80 70" stroke="#2C3E50" strokeWidth="4" fill="none" />
+    <path d="M15 75 Q 40 95 90 45 Q 60 90 15 75 Z" fill="#0EA5E9" />
+  </svg>
+);
+
+// --- Components ---
+
+const Navigation = ({ activePage, setActivePage, isMobileMenuOpen, setIsMobileMenuOpen }) => {
+  const navItems = [
+    { id: 'home', label: 'Home' },
+    { id: 'about', label: 'About Us' },
+    { id: 'services', label: 'Request Service' },
+    { id: 'careers', label: 'Careers' },
+    { id: 'contact', label: 'Contact' },
+    { id: 'employee', label: 'Employee Portal' },
+  ];
+
+  return (
+    <nav className="bg-slate-900 text-white sticky top-0 z-50 shadow-lg border-b-4 border-sky-500">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-20">
+          <div className="flex items-center cursor-pointer group" onClick={() => setActivePage('home')}>
+            <div className="bg-white p-1 rounded-full mr-3 group-hover:scale-105 transition-transform">
+              <SarLogo className="h-10 w-10 sm:h-12 sm:w-12" />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-2xl font-black tracking-tighter leading-none">SAR</span>
+              <span className="text-sky-400 font-bold tracking-widest text-sm leading-none">NETWORK</span>
+            </div>
+          </div>
+          <div className="hidden lg:block">
+            <div className="ml-10 flex items-baseline space-x-2">
+              {navItems.map((item) => (
+                <button key={item.id} onClick={() => setActivePage(item.id)} className={`px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 ${activePage === item.id ? 'bg-sky-600 text-white' : 'text-gray-300 hover:bg-slate-700 hover:text-white'}`}>
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="-mr-2 flex lg:hidden">
+            <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-white hover:bg-slate-700 focus:outline-none">
+              {isMobileMenuOpen ? <Icons.X className="h-6 w-6" /> : <Icons.Menu className="h-6 w-6" />}
+            </button>
+          </div>
+        </div>
+      </div>
+      {isMobileMenuOpen && (
+        <div className="lg:hidden bg-slate-800">
+          <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
+            {navItems.map((item) => (
+              <button key={item.id} onClick={() => { setActivePage(item.id); setIsMobileMenuOpen(false); }} className={`block w-full text-left px-3 py-2 rounded-md text-base font-medium ${activePage === item.id ? 'bg-sky-600 text-white' : 'text-gray-300 hover:bg-slate-700 hover:text-white'}`}>
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </nav>
+  );
+};
+
+const HomePage = ({ setActivePage }) => (
+  <div className="flex flex-col">
+    <div className="relative bg-slate-900 overflow-hidden">
+      <div className="absolute inset-0">
+        <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1562259949-e8e7689d7828?ixlib=rb-1.2.1&auto=format&fit=crop&w=1950&q=80')] bg-cover bg-center opacity-20"></div>
+        <div className="absolute inset-0 bg-gradient-to-r from-slate-900 via-slate-900/90 to-transparent"></div>
+      </div>
+      <div className="relative max-w-7xl mx-auto py-24 px-4 sm:px-6 lg:px-8 flex flex-col items-start justify-center min-h-[600px]">
+        <h1 className="text-4xl sm:text-6xl font-extrabold text-white tracking-tight mb-4">Stranded? <br /><span className="text-sky-500">We've Got You.</span></h1>
+        <p className="mt-4 text-xl text-gray-300 max-w-2xl mb-8">SAR Network provides 24/7 rapid response towing and roadside assistance. Trusted by thousands of drivers nationwide.</p>
+        <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+          <button onClick={() => setActivePage('services')} className="flex items-center justify-center px-8 py-4 border border-transparent text-lg font-bold rounded-full text-white bg-sky-600 hover:bg-sky-700 md:py-4 md:text-xl shadow-lg shadow-sky-900/50 transition-all hover:-translate-y-1">
+            <Icons.AlertTriangle className="mr-2 h-6 w-6" /> Request Help Now
+          </button>
+          <button onClick={() => setActivePage('contact')} className="flex items-center justify-center px-8 py-4 border-2 border-slate-600 text-lg font-bold rounded-full text-gray-200 hover:bg-slate-800 hover:border-slate-500 md:py-4 md:text-xl transition-all">
+            Contact Support
+          </button>
+        </div>
+      </div>
+    </div>
+    <div className="py-16 bg-white">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="text-center">
+          <h2 className="text-3xl font-extrabold text-slate-900 sm:text-4xl">Why Choose SAR Network?</h2>
+          <p className="mt-4 text-xl text-gray-500">Professional service, transparent pricing, and rapid arrival times.</p>
+        </div>
+        <div className="mt-12 grid gap-8 grid-cols-1 md:grid-cols-3">
+          {[
+            { icon: Icons.Clock, title: "24/7 Availability", text: "Day or night, rain or shine, our dispatch team is ready to take your call." },
+            { icon: Icons.MapPin, title: "Nationwide Coverage", text: "Our extensive network ensures we can reach you wherever you break down." },
+            { icon: Icons.CheckCircle, title: "Certified Professionals", text: "All our operators are licensed, insured, and rigorously trained." }
+          ].map((feature, idx) => (
+            <div key={idx} className="bg-slate-50 rounded-2xl p-8 border border-slate-100 hover:shadow-xl transition-shadow duration-300">
+              <div className="h-12 w-12 bg-sky-100 text-sky-600 rounded-xl flex items-center justify-center mb-6"><feature.icon className="h-6 w-6" /></div>
+              <h3 className="text-xl font-bold text-slate-900 mb-3">{feature.title}</h3>
+              <p className="text-gray-600 leading-relaxed">{feature.text}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
+const AboutPage = () => (
+  <div className="bg-white">
+    <div className="bg-slate-900 py-16 px-4">
+      <div className="max-w-7xl mx-auto text-center">
+        <h1 className="text-3xl md:text-5xl font-extrabold text-white mb-6">Our Story & Mission</h1>
+        <p className="text-xl text-gray-400 max-w-3xl mx-auto">Built on a foundation of trust, speed, and safety, SAR Network has evolved from a single truck operation into the nation's most reliable roadside recovery partner.</p>
+      </div>
+    </div>
+    <div className="max-w-7xl mx-auto py-16 px-4 sm:px-6 lg:px-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+        <div>
+            <div className="flex items-center mb-4"><Icons.History className="text-sky-600 h-8 w-8 mr-3"/><h2 className="text-3xl font-bold text-slate-900">Our History</h2></div>
+          <div className="prose prose-lg text-gray-600">
+            <p className="mb-4">Founded in 2005, <strong>SAR Network</strong> began with a simple mission: to provide honest, reliable help to stranded motorists who felt vulnerable on the side of the road.</p>
+            <p className="mb-4">Over the last two decades, we have invested heavily in technology to reduce wait times. In 2015, we launched our proprietary dispatch system.</p>
+            <p>Today, SAR Network partners with major insurance providers and manages a fleet of over 500 certified independent operators across the country.</p>
+          </div>
+        </div>
+        <div className="bg-slate-100 rounded-2xl p-8 border border-slate-200 shadow-inner">
+          <h3 className="text-xl font-bold text-slate-900 mb-6 border-b border-slate-300 pb-2">Milestones</h3>
+          <ul className="space-y-6">
+            <li className="flex"><span className="font-bold text-sky-600 w-24 shrink-0">2005</span><span className="text-gray-700">Company founded in Maplewood, NJ.</span></li>
+            <li className="flex"><span className="font-bold text-sky-600 w-24 shrink-0">2010</span><span className="text-gray-700">Expanded to Tri-State area coverage.</span></li>
+            <li className="flex"><span className="font-bold text-sky-600 w-24 shrink-0">2015</span><span className="text-gray-700">Launched Digital Dispatch System 1.0.</span></li>
+            <li className="flex"><span className="font-bold text-sky-600 w-24 shrink-0">2023</span><span className="text-gray-700">Rebranded to SAR Network; achieved 98% satisfaction rating.</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
+const ServiceRequestPage = () => {
+  const [submitted, setSubmitted] = useState(false);
+  const [step, setStep] = useState(1);
+  const [formData, setFormData] = useState({ type: '', location: '', phone: '', vehicle: '' });
+
+  const services = [
+    { id: 'tow', label: 'Towing', icon: Icons.Truck },
+    { id: 'flat', label: 'Flat Tire', icon: Icons.AlertTriangle },
+    { id: 'lockout', label: 'Lockout', icon: Icons.Key },
+    { id: 'battery', label: 'Dead Battery', icon: Icons.Battery },
+    { id: 'fuel', label: 'Out of Gas', icon: Icons.Fuel },
+  ];
+
+  const handleSubmit = (e) => { e.preventDefault(); setSubmitted(true); };
+
+  if (submitted) {
+    return (
+      <div className="max-w-md mx-auto mt-20 p-8 bg-green-50 rounded-2xl text-center border border-green-200">
+        <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4"><Icons.CheckCircle className="h-8 w-8" /></div>
+        <h2 className="text-2xl font-bold text-green-800 mb-2">Help is on the way!</h2>
+        <p className="text-green-700 mb-6">Ticket #SAR-9921 created.</p>
+        <button onClick={() => { setSubmitted(false); setStep(1); }} className="mt-6 text-green-700 font-semibold hover:underline">Start New Request</button>
+      </div>
+    );
   }
-}
+
+  return (
+    <div className="max-w-2xl mx-auto py-12 px-4">
+      <div className="mb-8 text-center">
+        <h2 className="text-3xl font-bold text-slate-900">Request Assistance</h2>
+        <p className="text-gray-600 mt-2">Tell us what happened so we can send the right truck.</p>
+      </div>
+      <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100">
+        <div className="p-8">
+          {step === 1 && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              {services.map((s) => (
+                <button key={s.id} onClick={() => { setFormData({...formData, type: s.label}); setStep(2); }} className="flex flex-col items-center justify-center p-6 border-2 border-gray-100 rounded-xl hover:border-sky-500 hover:bg-sky-50 transition-all group">
+                  <s.icon className="h-8 w-8 text-slate-400 group-hover:text-sky-600 mb-3" />
+                  <span className="font-semibold text-slate-700 group-hover:text-sky-700">{s.label}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {step === 2 && (
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Your Location</label>
+                <input type="text" placeholder="123 Highway Rd, Exit 4..." className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" value={formData.location} onChange={(e) => setFormData({...formData, location: e.target.value})} />
+              </div>
+              <button onClick={() => setStep(3)} disabled={!formData.location} className="w-full bg-sky-600 text-white py-3 rounded-lg font-bold hover:bg-sky-700 disabled:opacity-50">Next Step</button>
+            </div>
+          )}
+          {step === 3 && (
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Vehicle Details</label>
+                <input required type="text" placeholder="2018 Toyota Camry (Silver)" className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" value={formData.vehicle} onChange={(e) => setFormData({...formData, vehicle: e.target.value})} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Phone Number</label>
+                <input required type="tel" placeholder="(555) 123-4567" className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} />
+              </div>
+              <button type="submit" className="w-full bg-red-600 text-white py-4 rounded-lg font-bold text-lg hover:bg-red-700">Confirm Request</button>
+            </form>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
+// --- UPDATED EMPLOYEE PORTAL (FIREBASE CONNECTED) ---
+const EmployeePortal = () => {
+  const [user, setUser] = useState(null);
+  const [loadingAuth, setLoadingAuth] = useState(true);
+  
+  // Login Form State
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+  // User Data State
+  const [userData, setUserData] = useState(null);
+
+  // 1. Listen for Firebase Auth Changes
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setUser(currentUser);
+      if (currentUser) {
+        // Fetch their extra data from Firestore (like if they are admin)
+        const docRef = doc(db, "users", currentUser.uid);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          setUserData(docSnap.data());
+        } else {
+          // Default data if none exists
+          setUserData({ role: 'employee', name: currentUser.email });
+        }
+      } else {
+        setUserData(null);
+      }
+      setLoadingAuth(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // 2. Handle Login Submit
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setIsLoggingIn(true);
+    setLoginError('');
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      // Firebase onAuthStateChanged will automatically catch this
+    } catch (error) {
+      setLoginError("Invalid email or password.");
+      console.error(error);
+    }
+    setIsLoggingIn(false);
+  };
+
+  // 3. Handle Logout
+  const handleLogout = async () => {
+    await signOut(auth);
+  };
+
+  if (loadingAuth) {
+    return <div className="flex justify-center py-20"><p className="text-gray-500 font-bold animate-pulse">Connecting to Server...</p></div>;
+  }
+
+  // --- SHOW LOGIN SCREEN IF NOT LOGGED IN ---
+  if (!user) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] bg-slate-50 p-4">
+        <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-gray-200">
+          <div className="flex justify-center mb-6"><SarLogo className="h-16 w-16" /></div>
+          <h2 className="text-2xl font-bold text-center text-slate-900 mb-6">Employee Secure Login</h2>
+          
+          {loginError && (
+            <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-4 text-sm font-semibold border border-red-200">
+              {loginError}
+            </div>
+          )}
+
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700">Email Address</label>
+              <input 
+                type="email" 
+                required
+                className="mt-1 w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" 
+                placeholder="you@sarnetwork.com" 
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700">Password</label>
+              <input 
+                type="password" 
+                required
+                className="mt-1 w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" 
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </div>
+            <button 
+              disabled={isLoggingIn}
+              className="w-full bg-slate-900 text-white py-3 rounded-lg font-bold hover:bg-slate-800 transition-colors disabled:opacity-50"
+            >
+              {isLoggingIn ? "Authenticating..." : "Access Portal"}
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  // --- ADMIN VIEW ---
+  if (userData?.role === 'admin') {
+    return (
+      <div className="max-w-6xl mx-auto py-8 px-4">
+        <div className="flex justify-between items-center mb-8 bg-sky-900 text-white p-6 rounded-xl shadow-lg">
+          <div>
+            <h2 className="text-2xl font-black flex items-center"><Icons.Shield className="h-6 w-6 mr-2" /> Admin Dashboard</h2>
+            <p className="text-sky-200 text-sm">Welcome back, Boss. Logged in as: {user.email}</p>
+          </div>
+          <button onClick={handleLogout} className="flex items-center px-4 py-2 bg-sky-800 hover:bg-red-600 rounded-lg transition-colors font-bold text-sm">
+            <Icons.LogOut className="h-4 w-4 mr-2" /> Sign Out
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+            <h3 className="font-bold text-gray-800 mb-2">Pending Time Off</h3>
+            <p className="text-3xl font-black text-orange-500">3</p>
+            <button className="mt-4 text-sm text-sky-600 font-bold">Review Requests &rarr;</button>
+          </div>
+          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+            <h3 className="font-bold text-gray-800 mb-2">Active Drivers</h3>
+            <p className="text-3xl font-black text-green-500">12 / 15</p>
+            <button className="mt-4 text-sm text-sky-600 font-bold">View Fleet &rarr;</button>
+          </div>
+          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+            <h3 className="font-bold text-gray-800 mb-2">Manage Employees</h3>
+            <p className="text-gray-500 text-sm mb-4">Create or disable employee accounts.</p>
+            <button className="bg-slate-900 text-white py-2 px-4 rounded font-bold text-sm w-full">Open Directory</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // --- REGULAR EMPLOYEE VIEW ---
+  return (
+    <div className="max-w-6xl mx-auto py-8 px-4">
+      <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-8 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+        <div className="flex items-center mb-4 md:mb-0">
+          <div className="h-12 w-12 bg-sky-100 rounded-full flex items-center justify-center text-sky-600 font-bold text-xl mr-4">
+            <Icons.User />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-slate-900">Driver Portal</h2>
+            <p className="text-gray-500 text-sm">Logged in as: {user.email}</p>
+          </div>
+        </div>
+        <button onClick={handleLogout} className="flex items-center px-4 py-2 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors font-medium">
+          <Icons.LogOut className="h-5 w-5 mr-2" /> Sign Out
+        </button>
+      </div>
+
+      <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 text-center">
+         <h3 className="text-2xl font-bold mb-4">You are securely logged into Firebase!</h3>
+         <p className="text-gray-600 max-w-lg mx-auto">
+           This is the authenticated employee portal. In the next phase, we will add the real database connections here to save your time-clock data to the server.
+         </p>
+      </div>
+    </div>
+  );
+};
+
+
+const CareersPage = () => {
+  return (
+    <div className="max-w-7xl mx-auto py-16 px-4">
+      <div className="text-center mb-16">
+        <h2 className="text-3xl font-extrabold text-slate-900 sm:text-4xl">Join the SAR Network Team</h2>
+        <p className="mt-4 text-xl text-gray-500">We are always looking for dedicated professionals.</p>
+      </div>
+    </div>
+  );
+};
+
+const ContactPage = () => (
+  <div className="max-w-7xl mx-auto py-16 px-4">
+    <h2 className="text-3xl font-extrabold text-slate-900 mb-6">Contact Us</h2>
+    <p>1-800-SAR-HELP</p>
+  </div>
+);
+
+const Footer = ({ setActivePage }) => (
+  <footer className="bg-slate-900 text-white border-t border-slate-800 py-12 px-4 text-center">
+    <p>&copy; {new Date().getFullYear()} SAR Network. All rights reserved.</p>
+  </footer>
+);
+
+// --- Main App Component ---
+const App = () => {
+  const [activePage, setActivePage] = useState('home');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  useEffect(() => { window.scrollTo(0, 0); }, [activePage]);
+
+  return (
+    <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900">
+      <Navigation activePage={activePage} setActivePage={setActivePage} isMobileMenuOpen={isMobileMenuOpen} setIsMobileMenuOpen={setIsMobileMenuOpen} />
+      <main className="flex-grow">
+        {activePage === 'home' && <HomePage setActivePage={setActivePage} />}
+        {activePage === 'about' && <AboutPage />}
+        {activePage === 'services' && <ServiceRequestPage />}
+        {activePage === 'careers' && <CareersPage />}
+        {activePage === 'contact' && <ContactPage />}
+        {activePage === 'employee' && <EmployeePortal />}
+      </main>
+      <Footer setActivePage={setActivePage} />
+    </div>
+  );
+};
+
+export default App;
