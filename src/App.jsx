@@ -20,6 +20,10 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
+// --- 🔴 WEB3FORMS KEY 🔴 ---
+// PASTE YOUR KEY INSIDE THE QUOTES BELOW:
+const WEB3FORMS_KEY = "4fc553ba-8cdf-4e7b-afdd-3ffc465992bb"; 
+
 
 // --- BUILT-IN ICONS ---
 const IconWrapper = ({ children, className }) => (
@@ -199,8 +203,11 @@ const AboutPage = () => (
   </div>
 );
 
+// --- FORMS START HERE ---
+
 const ServiceRequestPage = () => {
   const [submitted, setSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({ type: '', location: '', phone: '', vehicle: '' });
 
@@ -212,14 +219,33 @@ const ServiceRequestPage = () => {
     { id: 'fuel', label: 'Out of Gas', icon: Icons.Fuel },
   ];
 
-  const handleSubmit = (e) => { e.preventDefault(); setSubmitted(true); };
+  const handleSubmit = async (e) => { 
+    e.preventDefault(); 
+    setIsSubmitting(true);
+
+    const data = new FormData();
+    data.append("access_key", WEB3FORMS_KEY);
+    data.append("subject", "🚨 NEW TOWING REQUEST");
+    data.append("Service Type", formData.type);
+    data.append("Location", formData.location);
+    data.append("Vehicle Details", formData.vehicle);
+    data.append("Phone Number", formData.phone);
+
+    try {
+      await fetch("https://api.web3forms.com/submit", { method: "POST", body: data });
+      setSubmitted(true);
+    } catch (error) {
+      alert("Something went wrong. Please call us directly!");
+    }
+    setIsSubmitting(false);
+  };
 
   if (submitted) {
     return (
       <div className="max-w-md mx-auto mt-20 p-8 bg-green-50 rounded-2xl text-center border border-green-200">
         <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4"><Icons.CheckCircle className="h-8 w-8" /></div>
         <h2 className="text-2xl font-bold text-green-800 mb-2">Help is on the way!</h2>
-        <p className="text-green-700 mb-6">Ticket #SAR-9921 created.</p>
+        <p className="text-green-700 mb-6">Your request has been received. A dispatcher will review your info and call you at {formData.phone}.</p>
         <button onClick={() => { setSubmitted(false); setStep(1); }} className="mt-6 text-green-700 font-semibold hover:underline">Start New Request</button>
       </div>
     );
@@ -262,7 +288,9 @@ const ServiceRequestPage = () => {
                 <label className="block text-sm font-medium text-slate-700 mb-1">Phone Number</label>
                 <input required type="tel" placeholder="(555) 123-4567" className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} />
               </div>
-              <button type="submit" className="w-full bg-red-600 text-white py-4 rounded-lg font-bold text-lg hover:bg-red-700">Confirm Request</button>
+              <button type="submit" disabled={isSubmitting} className="w-full bg-red-600 text-white py-4 rounded-lg font-bold text-lg hover:bg-red-700 disabled:opacity-50">
+                {isSubmitting ? "Sending Request..." : "Confirm Request"}
+              </button>
             </form>
           )}
         </div>
@@ -271,6 +299,217 @@ const ServiceRequestPage = () => {
   );
 };
 
+
+const CareersPage = () => {
+  const [selectedJob, setSelectedJob] = useState(null);
+  const [applicationStatus, setApplicationStatus] = useState('idle');
+
+  const jobs = [
+    { title: "Tow Truck Operator", type: "Full-time", loc: "Newark Area", pay: "$25-35/hr" },
+    { title: "Dispatch Coordinator", type: "Full-time", loc: "Remote/Hybrid", pay: "$20-28/hr" },
+    { title: "Roadside Technician", type: "Part-time", loc: "Jersey City", pay: "$22-30/hr" },
+  ];
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setApplicationStatus('submitting');
+    
+    // Automatically grabs all inputs with a "name" attribute and handles files!
+    const data = new FormData(e.target);
+    data.append("access_key", WEB3FORMS_KEY);
+    data.append("subject", `New Job Application: ${selectedJob.title}`);
+
+    try {
+      await fetch("https://api.web3forms.com/submit", { method: "POST", body: data });
+      setApplicationStatus('success');
+      window.scrollTo(0, 0);
+    } catch (error) {
+      alert("Failed to submit. Please try again.");
+      setApplicationStatus('idle');
+    }
+  };
+
+  if (applicationStatus === 'success') {
+    return (
+      <div className="max-w-md mx-auto py-16 px-4">
+        <div className="bg-green-50 p-8 rounded-2xl text-center border border-green-200 shadow-sm">
+          <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Icons.CheckCircle className="h-8 w-8" />
+          </div>
+          <h2 className="text-2xl font-bold text-green-800 mb-2">Application Received!</h2>
+          <p className="text-green-700 mb-6">
+            Thanks for applying to the <span className="font-bold">{selectedJob?.title}</span> position. 
+            Our hiring team will review your info and reach out within 3-5 business days.
+          </p>
+          <button onClick={() => { setSelectedJob(null); setApplicationStatus('idle'); }} className="text-green-700 font-bold hover:underline">
+            Back to Job Listings
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (selectedJob) {
+    return (
+      <div className="max-w-3xl mx-auto py-12 px-4 sm:px-6">
+        <button onClick={() => setSelectedJob(null)} className="flex items-center text-slate-500 hover:text-sky-600 font-medium mb-6 transition-colors">
+          <Icons.ArrowLeft className="h-4 w-4 mr-2" /> Back to Careers
+        </button>
+
+        <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100">
+          <div className="bg-slate-900 px-8 py-6 text-white">
+            <h2 className="text-2xl font-bold">Apply for {selectedJob.title}</h2>
+          </div>
+
+          <form onSubmit={handleSubmit} className="p-8 space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">First Name</label>
+                <input required type="text" name="First Name" className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">Last Name</label>
+                <input required type="text" name="Last Name" className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">Email Address</label>
+                <input required type="email" name="Email" className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">Phone Number</label>
+                <input required type="tel" name="Phone" className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-bold text-slate-700 mb-2">Experience / Relevant Skills</label>
+              <textarea required rows={4} name="Experience" className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" placeholder="Tell us about your driving experience, licenses, or dispatching background..."></textarea>
+            </div>
+
+            <div>
+              <label className="block text-sm font-bold text-slate-700 mb-2">Resume / CV (PDF or Word doc)</label>
+              <input 
+                required 
+                type="file" 
+                name="resume" 
+                accept=".pdf,.doc,.docx"
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 transition-all file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-sky-50 file:text-sky-700 hover:file:bg-sky-100 cursor-pointer" 
+              />
+            </div>
+
+            <div className="pt-4 border-t border-gray-100 flex items-center justify-end gap-4">
+              <button type="button" onClick={() => setSelectedJob(null)} className="px-6 py-3 text-slate-600 font-bold hover:bg-slate-100 rounded-lg">Cancel</button>
+              <button type="submit" disabled={applicationStatus === 'submitting'} className="px-8 py-3 bg-sky-600 text-white font-bold rounded-lg hover:bg-sky-700 disabled:opacity-70">
+                {applicationStatus === 'submitting' ? 'Sending...' : 'Submit Application'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-7xl mx-auto py-16 px-4 sm:px-6 lg:px-8">
+      <div className="text-center mb-16">
+        <h2 className="text-3xl font-extrabold text-slate-900 sm:text-4xl">Join the SAR Network Team</h2>
+        <p className="mt-4 text-xl text-gray-500 max-w-2xl mx-auto">We are always looking for dedicated professionals to help us keep drivers safe and moving.</p>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {jobs.map((job, idx) => (
+          <div key={idx} className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-100">
+            <div className="p-6">
+              <h3 className="text-xl font-bold text-slate-900 mb-2">{job.title}</h3>
+              <button onClick={() => { setSelectedJob(job); window.scrollTo(0, 0); }} className="mt-4 w-full py-2 border-2 border-sky-600 text-sky-600 font-bold rounded-lg hover:bg-sky-50 transition-colors">Apply Now</button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const ContactPage = () => {
+  const [status, setStatus] = useState("idle"); // idle, submitting, success
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setStatus("submitting");
+
+    const data = new FormData(e.target);
+    data.append("access_key", WEB3FORMS_KEY);
+    data.append("subject", "New General Contact Message");
+
+    try {
+      await fetch("https://api.web3forms.com/submit", { method: "POST", body: data });
+      setStatus("success");
+      e.target.reset(); // clear the form
+    } catch (error) {
+      alert("Failed to send message. Please try calling us instead.");
+      setStatus("idle");
+    }
+  };
+
+  return (
+    <div className="max-w-7xl mx-auto py-16 px-4 sm:px-6 lg:px-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-start">
+        {/* Info Side */}
+        <div>
+          <h2 className="text-3xl font-extrabold text-slate-900 mb-6">Contact Us</h2>
+          <p className="text-lg text-gray-600 mb-8">Have questions about a bill, a membership, or just want to leave feedback? Reach out to us.</p>
+          <div className="space-y-6">
+            <div className="flex items-start">
+              <Icons.Phone className="h-6 w-6 text-sky-600 mr-4" />
+              <div>
+                <h3 className="text-lg font-medium text-slate-900">Phone</h3>
+                <p className="mt-1 text-gray-500">Emergency: 1-800-SAR-HELP<br/>Office: 973-888-3028</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Form Side */}
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
+          <h3 className="text-2xl font-bold text-slate-900 mb-6">Send a Message</h3>
+          
+          {status === "success" ? (
+            <div className="bg-green-50 text-green-700 p-4 rounded-lg border border-green-200 text-center font-bold">
+              Message sent successfully! We will be in touch soon.
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">First Name</label>
+                  <input required name="First Name" type="text" className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Last Name</label>
+                  <input required name="Last Name" type="text" className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+                <input required name="Email" type="email" className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Message</label>
+                <textarea required name="Message" rows={4} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500"></textarea>
+              </div>
+              <button disabled={status === "submitting"} type="submit" className="w-full bg-slate-900 text-white py-3 rounded-lg font-bold hover:bg-slate-800 disabled:opacity-50">
+                {status === "submitting" ? "Sending..." : "Send Message"}
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // --- UPDATED EMPLOYEE PORTAL (FIREBASE CONNECTED) ---
 const EmployeePortal = () => {
@@ -443,24 +682,6 @@ const EmployeePortal = () => {
   );
 };
 
-
-const CareersPage = () => {
-  return (
-    <div className="max-w-7xl mx-auto py-16 px-4">
-      <div className="text-center mb-16">
-        <h2 className="text-3xl font-extrabold text-slate-900 sm:text-4xl">Join the SAR Network Team</h2>
-        <p className="mt-4 text-xl text-gray-500">We are always looking for dedicated professionals.</p>
-      </div>
-    </div>
-  );
-};
-
-const ContactPage = () => (
-  <div className="max-w-7xl mx-auto py-16 px-4">
-    <h2 className="text-3xl font-extrabold text-slate-900 mb-6">Contact Us</h2>
-    <p>1-800-SAR-HELP</p>
-  </div>
-);
 
 const Footer = ({ setActivePage }) => (
   <footer className="bg-slate-900 text-white border-t border-slate-800 py-12 px-4 text-center">
