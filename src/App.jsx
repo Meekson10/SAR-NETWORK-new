@@ -22,7 +22,7 @@ const db = getFirestore(app);
 
 // --- 🔴 WEB3FORMS KEY 🔴 ---
 // PASTE YOUR KEY INSIDE THE QUOTES BELOW:
-const WEB3FORMS_KEY = "4fc553ba-8cdf-4e7b-afdd-3ffc465992bb"; 
+const WEB3FORMS_KEY = "2f182922-a7f9-483f-afd0-73d11139bbe3"; 
 
 
 // --- BUILT-IN ICONS ---
