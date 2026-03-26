@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 
 // --- FIREBASE IMPORTS & SETUP ---
 import { initializeApp } from "firebase/app";
-import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
-import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore";
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword } from "firebase/auth";
+import { getFirestore, doc, getDoc, setDoc, collection, getDocs } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCgziMzaC5NUX2_Yru_pEwI-UjG3b4BdHM",
@@ -19,6 +19,11 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+
+// --- SECONDARY FIREBASE APP ---
+// We use this so the Admin can create new users without being logged out!
+const secondaryApp = initializeApp(firebaseConfig, "SecondaryApp");
+const secondaryAuth = getAuth(secondaryApp);
 
 // --- 🔴 WEB3FORMS KEY 🔴 ---
 // PASTE YOUR KEY INSIDE THE QUOTES BELOW:
@@ -546,6 +551,67 @@ const EmployeePortal = () => {
   // User Data State
   const [userData, setUserData] = useState(null);
 
+  // --- ADMIN SPECIFIC STATE ---
+  const [adminActiveTab, setAdminActiveTab] = useState('dashboard');
+  const [employeeList, setEmployeeList] = useState([]);
+  const [newEmpName, setNewEmpName] = useState('');
+  const [newEmpEmail, setNewEmpEmail] = useState('');
+  const [newEmpPassword, setNewEmpPassword] = useState('');
+  const [isCreatingUser, setIsCreatingUser] = useState(false);
+  const [createMessage, setCreateMessage] = useState(null);
+
+  // Fetch employees when entering directory
+  useEffect(() => {
+    if (userData?.role === 'admin' && adminActiveTab === 'directory') {
+      fetchEmployees();
+    }
+  }, [adminActiveTab, userData]);
+
+  const fetchEmployees = async () => {
+    try {
+      const querySnapshot = await getDocs(collection(db, "users"));
+      const users = [];
+      querySnapshot.forEach((doc) => {
+        users.push({ id: doc.id, ...doc.data() });
+      });
+      setEmployeeList(users);
+    } catch (error) {
+      console.error("Error fetching employees:", error);
+    }
+  };
+
+  const handleCreateEmployee = async (e) => {
+    e.preventDefault();
+    setIsCreatingUser(true);
+    setCreateMessage(null);
+    try {
+      // 1. Create account in Firebase Auth using the secondary backdoor
+      const userCredential = await createUserWithEmailAndPassword(secondaryAuth, newEmpEmail, newEmpPassword);
+      const newUserId = userCredential.user.uid;
+      
+      // 2. Save their profile data to the Firestore Database
+      await setDoc(doc(db, "users", newUserId), {
+        name: newEmpName,
+        email: newEmpEmail,
+        role: 'employee',
+        status: 'Active',
+        createdAt: new Date().toISOString()
+      });
+      
+      // 3. Log out the secondary app immediately so it stays secure
+      await signOut(secondaryAuth);
+      
+      setCreateMessage({ type: 'success', text: `Successfully created account for ${newEmpName}!` });
+      setNewEmpName('');
+      setNewEmpEmail('');
+      setNewEmpPassword('');
+      fetchEmployees(); // Refresh the table
+    } catch (error) {
+      setCreateMessage({ type: 'error', text: error.message });
+    }
+    setIsCreatingUser(false);
+  };
+
   // 1. Listen for Firebase Auth Changes
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -654,23 +720,104 @@ const EmployeePortal = () => {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-            <h3 className="font-bold text-gray-800 mb-2">Pending Time Off</h3>
-            <p className="text-3xl font-black text-orange-500">3</p>
-            <button className="mt-4 text-sm text-sky-600 font-bold">Review Requests &rarr;</button>
+        {adminActiveTab === 'dashboard' ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+              <h3 className="font-bold text-gray-800 mb-2">Pending Time Off</h3>
+              <p className="text-3xl font-black text-orange-500">3</p>
+              <button className="mt-4 text-sm text-sky-600 font-bold">Review Requests &rarr;</button>
+            </div>
+            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+              <h3 className="font-bold text-gray-800 mb-2">Active Drivers</h3>
+              <p className="text-3xl font-black text-green-500">12 / 15</p>
+              <button className="mt-4 text-sm text-sky-600 font-bold">View Fleet &rarr;</button>
+            </div>
+            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+              <h3 className="font-bold text-gray-800 mb-2">Manage Employees</h3>
+              <p className="text-gray-500 text-sm mb-4">Create or disable employee accounts.</p>
+              <button onClick={() => setAdminActiveTab('directory')} className="bg-slate-900 text-white py-2 px-4 rounded font-bold text-sm w-full hover:bg-slate-800 transition-colors">Open Directory</button>
+            </div>
           </div>
-          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-            <h3 className="font-bold text-gray-800 mb-2">Active Drivers</h3>
-            <p className="text-3xl font-black text-green-500">12 / 15</p>
-            <button className="mt-4 text-sm text-sky-600 font-bold">View Fleet &rarr;</button>
+        ) : (
+          <div className="space-y-6">
+            <button onClick={() => setAdminActiveTab('dashboard')} className="flex items-center text-slate-500 hover:text-sky-600 font-bold mb-4 transition-colors">
+              <Icons.ArrowLeft className="h-4 w-4 mr-2" /> Back to Dashboard
+            </button>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {/* Add Employee Form */}
+              <div className="lg:col-span-1 bg-white p-6 rounded-xl border border-gray-200 shadow-sm h-fit">
+                <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center"><Icons.User className="h-5 w-5 mr-2 text-sky-600" /> Add New Employee</h3>
+                
+                {createMessage && (
+                  <div className={`p-3 rounded-lg mb-4 text-sm font-semibold border ${createMessage.type === 'success' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-600 border-red-200'}`}>
+                    {createMessage.text}
+                  </div>
+                )}
+
+                <form onSubmit={handleCreateEmployee} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1">Full Name</label>
+                    <input required type="text" value={newEmpName} onChange={(e) => setNewEmpName(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" placeholder="John Doe" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1">Email Address</label>
+                    <input required type="email" value={newEmpEmail} onChange={(e) => setNewEmpEmail(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" placeholder="driver@sarnetwork.com" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1">Temporary Password</label>
+                    <input required type="password" value={newEmpPassword} onChange={(e) => setNewEmpPassword(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" placeholder="Min 6 characters" />
+                  </div>
+                  <button disabled={isCreatingUser} type="submit" className="w-full bg-sky-600 text-white py-3 rounded-lg font-bold hover:bg-sky-700 transition-colors disabled:opacity-50">
+                    {isCreatingUser ? "Creating..." : "Create Account"}
+                  </button>
+                </form>
+              </div>
+
+              {/* Employee List Table */}
+              <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                <div className="p-6 border-b border-gray-100 bg-slate-50">
+                  <h3 className="text-lg font-bold text-slate-900">Active Team Members</h3>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead className="bg-slate-100 text-slate-600 text-sm">
+                      <tr>
+                        <th className="p-4 font-semibold">Name</th>
+                        <th className="p-4 font-semibold">Email</th>
+                        <th className="p-4 font-semibold">Role</th>
+                        <th className="p-4 font-semibold">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {employeeList.map((emp) => (
+                        <tr key={emp.id} className="hover:bg-slate-50 transition-colors">
+                          <td className="p-4 font-bold text-slate-900">{emp.name || 'Admin User'}</td>
+                          <td className="p-4 text-slate-600">{emp.email}</td>
+                          <td className="p-4">
+                            <span className={`px-2 py-1 rounded-full text-xs font-bold uppercase ${emp.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-sky-100 text-sky-700'}`}>
+                              {emp.role || 'employee'}
+                            </span>
+                          </td>
+                          <td className="p-4">
+                            <span className="px-2 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700 uppercase">
+                              {emp.status || 'Active'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                      {employeeList.length === 0 && (
+                        <tr>
+                          <td colSpan="4" className="p-8 text-center text-gray-500 font-medium">Loading employee directory...</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-            <h3 className="font-bold text-gray-800 mb-2">Manage Employees</h3>
-            <p className="text-gray-500 text-sm mb-4">Create or disable employee accounts.</p>
-            <button className="bg-slate-900 text-white py-2 px-4 rounded font-bold text-sm w-full">Open Directory</button>
-          </div>
-        </div>
+        )}
       </div>
     );
   }
