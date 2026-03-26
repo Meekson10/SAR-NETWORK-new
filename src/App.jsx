@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 // --- FIREBASE IMPORTS & SETUP ---
 import { initializeApp } from "firebase/app";
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword } from "firebase/auth";
-import { getFirestore, doc, getDoc, setDoc, collection, getDocs } from "firebase/firestore";
+import { getFirestore, doc, getDoc, setDoc, collection, getDocs, updateDoc, addDoc } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCgziMzaC5NUX2_Yru_pEwI-UjG3b4BdHM",
@@ -20,13 +20,11 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// --- SECONDARY FIREBASE APP ---
-// We use this so the Admin can create new users without being logged out!
+// --- SECONDARY FIREBASE APP (For Admin User Creation) ---
 const secondaryApp = initializeApp(firebaseConfig, "SecondaryApp");
 const secondaryAuth = getAuth(secondaryApp);
 
 // --- 🔴 WEB3FORMS KEY 🔴 ---
-// PASTE YOUR KEY INSIDE THE QUOTES BELOW:
 const WEB3FORMS_KEY = "2f182922-a7f9-483f-afd0-73d11139bbe3"; 
 
 
@@ -208,7 +206,7 @@ const AboutPage = () => (
   </div>
 );
 
-// --- FORMS START HERE ---
+// --- FORMS ---
 
 const ServiceRequestPage = () => {
   const [submitted, setSubmitted] = useState(false);
@@ -239,12 +237,8 @@ const ServiceRequestPage = () => {
     try {
       const response = await fetch("https://api.web3forms.com/submit", { method: "POST", body: data });
       const result = await response.json();
-      
-      if (result.success) {
-        setSubmitted(true);
-      } else {
-        alert("Error: " + result.message);
-      }
+      if (result.success) setSubmitted(true);
+      else alert("Error: " + result.message);
     } catch (error) {
       alert("Something went wrong. Please call us directly!");
     }
@@ -325,7 +319,6 @@ const CareersPage = () => {
     e.preventDefault();
     setApplicationStatus('submitting');
     
-    // Automatically grabs all inputs with a "name" attribute and handles files!
     const data = new FormData(e.target);
     data.append("access_key", WEB3FORMS_KEY);
     data.append("subject", `New Job Application: ${selectedJob.title}`);
@@ -453,7 +446,7 @@ const CareersPage = () => {
 };
 
 const ContactPage = () => {
-  const [status, setStatus] = useState("idle"); // idle, submitting, success
+  const [status, setStatus] = useState("idle");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -469,7 +462,7 @@ const ContactPage = () => {
       
       if (result.success) {
         setStatus("success");
-        e.target.reset(); // clear the form
+        e.target.reset();
       } else {
         alert("Message failed to send: " + result.message);
         setStatus("idle");
@@ -483,7 +476,6 @@ const ContactPage = () => {
   return (
     <div className="max-w-7xl mx-auto py-16 px-4 sm:px-6 lg:px-8">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-start">
-        {/* Info Side */}
         <div>
           <h2 className="text-3xl font-extrabold text-slate-900 mb-6">Contact Us</h2>
           <p className="text-lg text-gray-600 mb-8">Have questions about a bill, a membership, or just want to leave feedback? Reach out to us.</p>
@@ -498,7 +490,6 @@ const ContactPage = () => {
           </div>
         </div>
 
-        {/* Form Side */}
         <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
           <h3 className="text-2xl font-bold text-slate-900 mb-6">Send a Message</h3>
           
@@ -560,12 +551,30 @@ const EmployeePortal = () => {
   const [isCreatingUser, setIsCreatingUser] = useState(false);
   const [createMessage, setCreateMessage] = useState(null);
 
-  // Fetch employees when entering directory
+  // --- REGULAR EMPLOYEE SPECIFIC STATE ---
+  const [empTab, setEmpTab] = useState('dashboard');
+  // Profile Form States
+  const [profileAddress, setProfileAddress] = useState('');
+  const [profilePhone, setProfilePhone] = useState('');
+  const [profileRouting, setProfileRouting] = useState('');
+  const [profileAccount, setProfileAccount] = useState('');
+  const [profileStatus, setProfileStatus] = useState('');
+  // Time Off Form States
+  const [timeOffStart, setTimeOffStart] = useState('');
+  const [timeOffEnd, setTimeOffEnd] = useState('');
+  const [timeOffReason, setTimeOffReason] = useState('');
+  const [timeOffStatus, setTimeOffStatus] = useState('');
+  const [timeOffHistory, setTimeOffHistory] = useState([]);
+
+  // Fetch extra data
   useEffect(() => {
     if (userData?.role === 'admin' && adminActiveTab === 'directory') {
       fetchEmployees();
     }
-  }, [adminActiveTab, userData]);
+    if (userData?.role !== 'admin' && user && empTab === 'timeoff') {
+      fetchTimeOffHistory();
+    }
+  }, [adminActiveTab, userData, empTab]);
 
   const fetchEmployees = async () => {
     try {
@@ -580,36 +589,102 @@ const EmployeePortal = () => {
     }
   };
 
+  const fetchTimeOffHistory = async () => {
+    try {
+      const querySnapshot = await getDocs(collection(db, "users", user.uid, "time_off"));
+      const requests = [];
+      querySnapshot.forEach((doc) => {
+        requests.push({ id: doc.id, ...doc.data() });
+      });
+      setTimeOffHistory(requests);
+    } catch (error) {
+      console.error("Error fetching time off:", error);
+    }
+  };
+
   const handleCreateEmployee = async (e) => {
     e.preventDefault();
     setIsCreatingUser(true);
     setCreateMessage(null);
     try {
-      // 1. Create account in Firebase Auth using the secondary backdoor
       const userCredential = await createUserWithEmailAndPassword(secondaryAuth, newEmpEmail, newEmpPassword);
       const newUserId = userCredential.user.uid;
       
-      // 2. Save their profile data to the Firestore Database
       await setDoc(doc(db, "users", newUserId), {
         name: newEmpName,
         email: newEmpEmail,
         role: 'employee',
         status: 'Active',
+        workStatus: 'Clocked Out',
         createdAt: new Date().toISOString()
       });
       
-      // 3. Log out the secondary app immediately so it stays secure
       await signOut(secondaryAuth);
       
       setCreateMessage({ type: 'success', text: `Successfully created account for ${newEmpName}!` });
       setNewEmpName('');
       setNewEmpEmail('');
       setNewEmpPassword('');
-      fetchEmployees(); // Refresh the table
+      fetchEmployees();
     } catch (error) {
       setCreateMessage({ type: 'error', text: error.message });
     }
     setIsCreatingUser(false);
+  };
+
+  // --- EMPLOYEE FUNCTIONS ---
+  const handleClockToggle = async () => {
+    if (!user) return;
+    const isCurrentlyClockedIn = userData?.workStatus === 'Clocked In';
+    const newStatus = isCurrentlyClockedIn ? 'Clocked Out' : 'Clocked In';
+    const timestamp = new Date().toLocaleString();
+
+    try {
+      await updateDoc(doc(db, "users", user.uid), { 
+        workStatus: newStatus,
+        lastPunch: timestamp
+      });
+      setUserData({ ...userData, workStatus: newStatus, lastPunch: timestamp });
+    } catch (error) {
+      alert("Failed to clock in. Check connection.");
+    }
+  };
+
+  const handleUpdateProfile = async (e) => {
+    e.preventDefault();
+    setProfileStatus('saving');
+    try {
+      await updateDoc(doc(db, "users", user.uid), {
+        address: profileAddress,
+        phone: profilePhone,
+        banking: { routing: profileRouting, account: profileAccount }
+      });
+      setUserData({ ...userData, address: profileAddress, phone: profilePhone, banking: { routing: profileRouting, account: profileAccount } });
+      setProfileStatus('saved');
+      setTimeout(() => setProfileStatus(''), 3000);
+    } catch (error) {
+      setProfileStatus('error');
+    }
+  };
+
+  const handleTimeOffSubmit = async (e) => {
+    e.preventDefault();
+    setTimeOffStatus('submitting');
+    try {
+      await addDoc(collection(db, "users", user.uid, "time_off"), {
+        startDate: timeOffStart,
+        endDate: timeOffEnd,
+        reason: timeOffReason,
+        status: 'Pending Approval',
+        submittedAt: new Date().toISOString()
+      });
+      setTimeOffStatus('success');
+      setTimeOffStart(''); setTimeOffEnd(''); setTimeOffReason('');
+      fetchTimeOffHistory();
+      setTimeout(() => setTimeOffStatus(''), 3000);
+    } catch (error) {
+      setTimeOffStatus('error');
+    }
   };
 
   // 1. Listen for Firebase Auth Changes
@@ -617,14 +692,20 @@ const EmployeePortal = () => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
-        // Fetch their extra data from Firestore (like if they are admin)
         const docRef = doc(db, "users", currentUser.uid);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
-          setUserData(docSnap.data());
+          const data = docSnap.data();
+          setUserData(data);
+          // Pre-fill profile forms if data exists
+          if (data.address) setProfileAddress(data.address);
+          if (data.phone) setProfilePhone(data.phone);
+          if (data.banking) {
+            setProfileRouting(data.banking.routing || '');
+            setProfileAccount(data.banking.account || '');
+          }
         } else {
-          // Default data if none exists
-          setUserData({ role: 'employee', name: currentUser.email });
+          setUserData({ role: 'employee', name: currentUser.email, workStatus: 'Clocked Out' });
         }
       } else {
         setUserData(null);
@@ -634,22 +715,18 @@ const EmployeePortal = () => {
     return () => unsubscribe();
   }, []);
 
-  // 2. Handle Login Submit
   const handleLogin = async (e) => {
     e.preventDefault();
     setIsLoggingIn(true);
     setLoginError('');
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      // Firebase onAuthStateChanged will automatically catch this
     } catch (error) {
       setLoginError("Invalid email or password.");
-      console.error(error);
     }
     setIsLoggingIn(false);
   };
 
-  // 3. Handle Logout
   const handleLogout = async () => {
     await signOut(auth);
   };
@@ -724,7 +801,7 @@ const EmployeePortal = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
               <h3 className="font-bold text-gray-800 mb-2">Pending Time Off</h3>
-              <p className="text-3xl font-black text-orange-500">3</p>
+              <p className="text-3xl font-black text-orange-500">1</p>
               <button className="mt-4 text-sm text-sky-600 font-bold">Review Requests &rarr;</button>
             </div>
             <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
@@ -745,7 +822,6 @@ const EmployeePortal = () => {
             </button>
             
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              {/* Add Employee Form */}
               <div className="lg:col-span-1 bg-white p-6 rounded-xl border border-gray-200 shadow-sm h-fit">
                 <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center"><Icons.User className="h-5 w-5 mr-2 text-sky-600" /> Add New Employee</h3>
                 
@@ -774,7 +850,6 @@ const EmployeePortal = () => {
                 </form>
               </div>
 
-              {/* Employee List Table */}
               <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                 <div className="p-6 border-b border-gray-100 bg-slate-50">
                   <h3 className="text-lg font-bold text-slate-900">Active Team Members</h3>
@@ -825,14 +900,15 @@ const EmployeePortal = () => {
   // --- REGULAR EMPLOYEE VIEW ---
   return (
     <div className="max-w-6xl mx-auto py-8 px-4">
+      {/* Employee Header */}
       <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-8 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
         <div className="flex items-center mb-4 md:mb-0">
           <div className="h-12 w-12 bg-sky-100 rounded-full flex items-center justify-center text-sky-600 font-bold text-xl mr-4">
             <Icons.User />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-slate-900">Driver Portal</h2>
-            <p className="text-gray-500 text-sm">Logged in as: {user.email}</p>
+            <h2 className="text-xl font-bold text-slate-900">Welcome, {userData?.name || 'Driver'}</h2>
+            <p className="text-gray-500 text-sm">{user.email}</p>
           </div>
         </div>
         <button onClick={handleLogout} className="flex items-center px-4 py-2 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors font-medium">
@@ -840,11 +916,229 @@ const EmployeePortal = () => {
         </button>
       </div>
 
-      <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 text-center">
-         <h3 className="text-2xl font-bold mb-4">You are securely logged into Firebase!</h3>
-         <p className="text-gray-600 max-w-lg mx-auto">
-           This is the authenticated employee portal. In the next phase, we will add the real database connections here to save your time-clock data to the server.
-         </p>
+      <div className="flex flex-col md:flex-row gap-8">
+        {/* Sidebar Menu */}
+        <div className="w-full md:w-64 bg-white rounded-xl shadow-sm border border-gray-100 p-4 h-fit">
+          <nav className="space-y-2">
+            <button onClick={() => setEmpTab('dashboard')} className={`w-full flex items-center p-3 rounded-lg font-bold transition-colors ${empTab === 'dashboard' ? 'bg-sky-50 text-sky-700' : 'text-slate-600 hover:bg-slate-50'}`}>
+              <Icons.Clock className="h-5 w-5 mr-3"/> Time Clock
+            </button>
+            <button onClick={() => setEmpTab('schedule')} className={`w-full flex items-center p-3 rounded-lg font-bold transition-colors ${empTab === 'schedule' ? 'bg-sky-50 text-sky-700' : 'text-slate-600 hover:bg-slate-50'}`}>
+              <Icons.Calendar className="h-5 w-5 mr-3"/> My Schedule
+            </button>
+            <button onClick={() => setEmpTab('timeoff')} className={`w-full flex items-center p-3 rounded-lg font-bold transition-colors ${empTab === 'timeoff' ? 'bg-sky-50 text-sky-700' : 'text-slate-600 hover:bg-slate-50'}`}>
+              <Icons.Palmtree className="h-5 w-5 mr-3"/> Request Time Off
+            </button>
+            <button onClick={() => setEmpTab('profile')} className={`w-full flex items-center p-3 rounded-lg font-bold transition-colors ${empTab === 'profile' ? 'bg-sky-50 text-sky-700' : 'text-slate-600 hover:bg-slate-50'}`}>
+              <Icons.User className="h-5 w-5 mr-3"/> My Profile
+            </button>
+          </nav>
+        </div>
+
+        {/* Main Content Area */}
+        <div className="flex-1 bg-white rounded-xl shadow-sm border border-gray-100 p-6 md:p-8">
+          
+          {/* TAB 1: TIME CLOCK & STATS */}
+          {empTab === 'dashboard' && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+              <div className="text-center">
+                <h3 className="text-2xl font-bold text-slate-900 mb-2">Shift Status</h3>
+                <p className="text-gray-500 mb-8">Record your hours securely to the database.</p>
+                
+                <div className={`p-6 rounded-2xl border-2 mb-8 ${userData?.workStatus === 'Clocked In' ? 'bg-green-50 border-green-200' : 'bg-slate-50 border-slate-200'}`}>
+                  <p className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">Current Status</p>
+                  <p className={`text-3xl font-black ${userData?.workStatus === 'Clocked In' ? 'text-green-600' : 'text-slate-700'}`}>
+                    {userData?.workStatus || 'Clocked Out'}
+                  </p>
+                  {userData?.lastPunch && (
+                    <p className="text-sm text-gray-500 mt-2">Last punch: {userData.lastPunch}</p>
+                  )}
+                </div>
+
+                <button 
+                  onClick={handleClockToggle}
+                  className={`w-full py-4 rounded-xl font-bold text-lg text-white shadow-lg transition-transform hover:-translate-y-1 ${userData?.workStatus === 'Clocked In' ? 'bg-red-500 hover:bg-red-600 shadow-red-500/30' : 'bg-green-500 hover:bg-green-600 shadow-green-500/30'}`}
+                >
+                  {userData?.workStatus === 'Clocked In' ? 'CLOCK OUT' : 'CLOCK IN'}
+                </button>
+              </div>
+
+              <div className="space-y-6">
+                <div className="bg-slate-50 p-6 rounded-2xl border border-gray-100 h-full">
+                  <h4 className="font-bold text-slate-700 mb-6 text-lg">Current Pay Period Stats</h4>
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center p-5 bg-white rounded-xl shadow-sm border border-gray-100">
+                      <div className="flex items-center"><Icons.Clock className="h-6 w-6 text-sky-500 mr-3"/> <span className="font-bold text-slate-700">Hours Worked</span></div>
+                      <span className="text-2xl font-black text-slate-900">{userData?.hoursWorked || '0.0'} <span className="text-sm font-medium text-gray-500">hrs</span></span>
+                    </div>
+                    <div className="flex justify-between items-center p-5 bg-white rounded-xl shadow-sm border border-gray-100">
+                      <div className="flex items-center"><Icons.Palmtree className="h-6 w-6 text-green-500 mr-3"/> <span className="font-bold text-slate-700">PTO Earned</span></div>
+                      <span className="text-2xl font-black text-slate-900">{userData?.ptoEarned || '0.0'} <span className="text-sm font-medium text-gray-500">hrs</span></span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-6 text-center">Stats automatically sync with Admin dispatch timesheets.</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 1.5: SCHEDULE CALENDAR */}
+          {empTab === 'schedule' && (
+            <div>
+              <div className="flex justify-between items-center mb-6 border-b pb-4">
+                <h3 className="text-2xl font-bold text-slate-900">My Schedule</h3>
+                <span className="bg-sky-100 text-sky-700 px-3 py-1 rounded-full text-sm font-bold">This Week</span>
+              </div>
+              
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 text-slate-600 text-sm">
+                        <th className="p-4 font-bold border-b border-gray-100">Date</th>
+                        <th className="p-4 font-bold border-b border-gray-100">Shift Time</th>
+                        <th className="p-4 font-bold border-b border-gray-100">Assigned Unit</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {/* Using visual placeholder data until you set up an Admin Calendar Tool */}
+                      {[
+                        { date: "Monday", time: "8:00 AM - 4:00 PM", unit: "Tow-402" },
+                        { date: "Tuesday", time: "8:00 AM - 4:00 PM", unit: "Tow-402" },
+                        { date: "Wednesday", time: "8:00 AM - 4:00 PM", unit: "Tow-402" },
+                        { date: "Thursday", time: "OFF", unit: "-" },
+                        { date: "Friday", time: "8:00 AM - 4:00 PM", unit: "Tow-405" },
+                      ].map((shift, i) => (
+                        <tr key={i} className="hover:bg-slate-50 transition-colors">
+                          <td className="p-4 font-semibold text-slate-800">{shift.date}</td>
+                          <td className="p-4 text-slate-600">
+                            {shift.time === 'OFF' ? <span className="px-2 py-1 bg-gray-100 text-gray-500 rounded font-bold text-xs uppercase">Off Duty</span> : shift.time}
+                          </td>
+                          <td className="p-4 text-slate-500 font-mono">{shift.unit}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2: TIME OFF */}
+          {empTab === 'timeoff' && (
+            <div>
+              <h3 className="text-2xl font-bold text-slate-900 mb-6 border-b pb-4">Request Time Off</h3>
+              
+              {/* Added PTO Balances up top! */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center">
+                  <div className="p-4 bg-orange-100 text-orange-600 rounded-xl mr-4">
+                    <Icons.Thermometer className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <p className="text-gray-500 text-sm font-medium">Sick Hours Available</p>
+                    <p className="text-2xl font-black text-slate-900">{userData?.sickEarned || '24.0'} hrs</p>
+                  </div>
+                </div>
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center">
+                  <div className="p-4 bg-teal-100 text-teal-600 rounded-xl mr-4">
+                    <Icons.Palmtree className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <p className="text-gray-500 text-sm font-medium">Vacation (PTO) Available</p>
+                    <p className="text-2xl font-black text-slate-900">{userData?.ptoEarned || '0.0'} hrs</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-12">
+                <form onSubmit={handleTimeOffSubmit} className="space-y-4">
+                  {timeOffStatus === 'success' && <div className="bg-green-50 text-green-700 p-3 rounded-lg font-bold border border-green-200">Request submitted to Admin!</div>}
+                  {timeOffStatus === 'error' && <div className="bg-red-50 text-red-600 p-3 rounded-lg font-bold border border-red-200">Failed to submit.</div>}
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-1">Start Date</label>
+                      <input type="date" required value={timeOffStart} onChange={(e) => setTimeOffStart(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-1">End Date</label>
+                      <input type="date" required value={timeOffEnd} onChange={(e) => setTimeOffEnd(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1">Reason (Optional)</label>
+                    <input type="text" value={timeOffReason} onChange={(e) => setTimeOffReason(e.target.value)} placeholder="Vacation, Doctor Appt, etc." className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" />
+                  </div>
+                  <button type="submit" disabled={timeOffStatus === 'submitting'} className="bg-sky-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-sky-700 w-full disabled:opacity-50">
+                    {timeOffStatus === 'submitting' ? 'Submitting...' : 'Submit Request'}
+                  </button>
+                </form>
+
+                <div>
+                  <h4 className="font-bold text-slate-700 mb-4">Your Recent Requests</h4>
+                  <div className="space-y-3">
+                    {timeOffHistory.map((req) => (
+                      <div key={req.id} className="p-3 border border-gray-100 bg-slate-50 rounded-lg flex justify-between items-center">
+                        <div>
+                          <p className="font-bold text-sm text-slate-800">{req.startDate} to {req.endDate}</p>
+                          <p className="text-xs text-gray-500">{req.reason || 'No reason provided'}</p>
+                        </div>
+                        <span className="bg-orange-100 text-orange-700 px-2 py-1 rounded text-xs font-bold uppercase">{req.status}</span>
+                      </div>
+                    ))}
+                    {timeOffHistory.length === 0 && <p className="text-sm text-gray-500">No time off requested yet.</p>}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: PROFILE & BANKING */}
+          {empTab === 'profile' && (
+            <div>
+              <h3 className="text-2xl font-bold text-slate-900 mb-6 border-b pb-4">Personal & Banking Info</h3>
+              
+              <form onSubmit={handleUpdateProfile} className="space-y-8 max-w-2xl">
+                {profileStatus === 'saved' && <div className="bg-green-50 text-green-700 p-3 rounded-lg font-bold border border-green-200">Profile updated securely!</div>}
+                
+                {/* Contact Info */}
+                <div className="space-y-4">
+                  <h4 className="text-lg font-bold text-slate-700 flex items-center"><Icons.MapPin className="h-5 w-5 mr-2 text-sky-600"/> Contact Information</h4>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Mailing Address</label>
+                    <input type="text" value={profileAddress} onChange={(e) => setProfileAddress(e.target.value)} placeholder="123 Main St, Apt 4B, City, State, ZIP" className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Phone Number</label>
+                    <input type="tel" value={profilePhone} onChange={(e) => setProfilePhone(e.target.value)} placeholder="(555) 123-4567" className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" />
+                  </div>
+                </div>
+
+                {/* Banking Info */}
+                <div className="space-y-4 pt-6 border-t border-gray-100">
+                  <h4 className="text-lg font-bold text-slate-700 flex items-center"><Icons.CreditCard className="h-5 w-5 mr-2 text-sky-600"/> Direct Deposit Information</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Routing Number</label>
+                      <input type="password" value={profileRouting} onChange={(e) => setProfileRouting(e.target.value)} placeholder="•••••••••" className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Account Number</label>
+                      <input type="password" value={profileAccount} onChange={(e) => setProfileAccount(e.target.value)} placeholder="••••••••••" className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" />
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500 font-medium"><Icons.Shield className="h-3 w-3 inline mr-1" /> Banking information is encrypted and securely saved to Firebase.</p>
+                </div>
+
+                <button type="submit" disabled={profileStatus === 'saving'} className="bg-slate-900 text-white px-8 py-3 rounded-lg font-bold hover:bg-slate-800 disabled:opacity-50 flex items-center">
+                  <Icons.Save className="h-5 w-5 mr-2" /> {profileStatus === 'saving' ? 'Saving...' : 'Save Profile Changes'}
+                </button>
+              </form>
+            </div>
+          )}
+
+        </div>
       </div>
     </div>
   );
