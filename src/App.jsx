@@ -232,8 +232,14 @@ const ServiceRequestPage = () => {
     data.append("Phone Number", formData.phone);
 
     try {
-      await fetch("https://api.web3forms.com/submit", { method: "POST", body: data });
-      setSubmitted(true);
+      const response = await fetch("https://api.web3forms.com/submit", { method: "POST", body: data });
+      const result = await response.json();
+      
+      if (result.success) {
+        setSubmitted(true);
+      } else {
+        alert("Error: " + result.message);
+      }
     } catch (error) {
       alert("Something went wrong. Please call us directly!");
     }
@@ -320,9 +326,16 @@ const CareersPage = () => {
     data.append("subject", `New Job Application: ${selectedJob.title}`);
 
     try {
-      await fetch("https://api.web3forms.com/submit", { method: "POST", body: data });
-      setApplicationStatus('success');
-      window.scrollTo(0, 0);
+      const response = await fetch("https://api.web3forms.com/submit", { method: "POST", body: data });
+      const result = await response.json();
+      
+      if (result.success) {
+        setApplicationStatus('success');
+        window.scrollTo(0, 0);
+      } else {
+        alert("Application failed to send: " + result.message);
+        setApplicationStatus('idle');
+      }
     } catch (error) {
       alert("Failed to submit. Please try again.");
       setApplicationStatus('idle');
@@ -445,9 +458,16 @@ const ContactPage = () => {
     data.append("subject", "New General Contact Message");
 
     try {
-      await fetch("https://api.web3forms.com/submit", { method: "POST", body: data });
-      setStatus("success");
-      e.target.reset(); // clear the form
+      const response = await fetch("https://api.web3forms.com/submit", { method: "POST", body: data });
+      const result = await response.json();
+      
+      if (result.success) {
+        setStatus("success");
+        e.target.reset(); // clear the form
+      } else {
+        alert("Message failed to send: " + result.message);
+        setStatus("idle");
+      }
     } catch (error) {
       alert("Failed to send message. Please try calling us instead.");
       setStatus("idle");
