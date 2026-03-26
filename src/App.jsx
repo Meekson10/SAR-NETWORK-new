@@ -403,14 +403,15 @@ const CareersPage = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-bold text-slate-700 mb-2">Resume / CV (PDF or Word doc)</label>
+              <label className="block text-sm font-bold text-slate-700 mb-2">Resume / Portfolio Link</label>
               <input 
                 required 
-                type="file" 
-                name="resume" 
-                accept=".pdf,.doc,.docx"
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 transition-all file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-sky-50 file:text-sky-700 hover:file:bg-sky-100 cursor-pointer" 
+                type="url" 
+                name="Resume Link" 
+                placeholder="Paste a link to your Google Drive, Dropbox, or LinkedIn profile..."
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 transition-all" 
               />
+              <p className="text-xs text-gray-500 mt-2 font-medium">Note: Ensure your document link is set to "Anyone can view".</p>
             </div>
 
             <div className="pt-4 border-t border-gray-100 flex items-center justify-end gap-4">
