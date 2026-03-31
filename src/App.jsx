@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 // --- FIREBASE IMPORTS & SETUP ---
 import { initializeApp } from "firebase/app";
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword } from "firebase/auth";
-import { getFirestore, doc, getDoc, setDoc, collection, getDocs, updateDoc, addDoc } from "firebase/firestore";
+import { getFirestore, doc, getDoc, setDoc, collection, getDocs, updateDoc, addDoc, deleteDoc } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCgziMzaC5NUX2_Yru_pEwI-UjG3b4BdHM",
@@ -205,8 +205,6 @@ const AboutPage = () => (
     </div>
   </div>
 );
-
-// --- FORMS ---
 
 const ServiceRequestPage = () => {
   const [submitted, setSubmitted] = useState(false);
@@ -550,6 +548,13 @@ const EmployeePortal = () => {
   const [newEmpPassword, setNewEmpPassword] = useState('');
   const [isCreatingUser, setIsCreatingUser] = useState(false);
   const [createMessage, setCreateMessage] = useState(null);
+  
+  // Admin Schedule Manager States
+  const [selectedEmpId, setSelectedEmpId] = useState('');
+  const [empSchedule, setEmpSchedule] = useState([]);
+  const [shiftDate, setShiftDate] = useState('');
+  const [shiftTime, setShiftTime] = useState('');
+  const [shiftUnit, setShiftUnit] = useState('');
 
   // --- REGULAR EMPLOYEE SPECIFIC STATE ---
   const [empTab, setEmpTab] = useState('dashboard');
@@ -559,6 +564,8 @@ const EmployeePortal = () => {
   const [profileRouting, setProfileRouting] = useState('');
   const [profileAccount, setProfileAccount] = useState('');
   const [profileStatus, setProfileStatus] = useState('');
+  // Employee Schedule State
+  const [mySchedule, setMySchedule] = useState([]);
   // Time Off Form States
   const [timeOffStart, setTimeOffStart] = useState('');
   const [timeOffEnd, setTimeOffEnd] = useState('');
@@ -566,15 +573,25 @@ const EmployeePortal = () => {
   const [timeOffStatus, setTimeOffStatus] = useState('');
   const [timeOffHistory, setTimeOffHistory] = useState([]);
 
-  // Fetch extra data
+  // Fetch extra data for Admin/Employees
   useEffect(() => {
-    if (userData?.role === 'admin' && adminActiveTab === 'directory') {
+    if (userData?.role === 'admin' && (adminActiveTab === 'directory' || adminActiveTab === 'scheduleManager')) {
       fetchEmployees();
     }
     if (userData?.role !== 'admin' && user && empTab === 'timeoff') {
       fetchTimeOffHistory();
     }
+    if (userData?.role !== 'admin' && user && empTab === 'schedule') {
+      fetchMySchedule();
+    }
   }, [adminActiveTab, userData, empTab]);
+
+  // Fetch specific employee schedule when Admin selects them
+  useEffect(() => {
+    if (adminActiveTab === 'scheduleManager' && selectedEmpId) {
+      fetchEmpSchedule(selectedEmpId);
+    }
+  }, [selectedEmpId, adminActiveTab]);
 
   const fetchEmployees = async () => {
     try {
@@ -586,6 +603,32 @@ const EmployeePortal = () => {
       setEmployeeList(users);
     } catch (error) {
       console.error("Error fetching employees:", error);
+    }
+  };
+
+  const fetchEmpSchedule = async (uid) => {
+    if (!uid) return setEmpSchedule([]);
+    try {
+      const snap = await getDocs(collection(db, "users", uid, "schedules"));
+      const shifts = [];
+      snap.forEach(doc => shifts.push({ id: doc.id, ...doc.data() }));
+      shifts.sort((a, b) => new Date(a.date) - new Date(b.date));
+      setEmpSchedule(shifts);
+    } catch (error) {
+      console.error("Error fetching admin schedule:", error);
+    }
+  };
+
+  const fetchMySchedule = async () => {
+    if (!user) return;
+    try {
+      const snap = await getDocs(collection(db, "users", user.uid, "schedules"));
+      const shifts = [];
+      snap.forEach(doc => shifts.push({ id: doc.id, ...doc.data() }));
+      shifts.sort((a, b) => new Date(a.date) - new Date(b.date));
+      setMySchedule(shifts);
+    } catch (error) {
+      console.error("Error fetching my schedule:", error);
     }
   };
 
@@ -602,6 +645,7 @@ const EmployeePortal = () => {
     }
   };
 
+  // --- ADMIN FUNCTIONS ---
   const handleCreateEmployee = async (e) => {
     e.preventDefault();
     setIsCreatingUser(true);
@@ -630,6 +674,33 @@ const EmployeePortal = () => {
       setCreateMessage({ type: 'error', text: error.message });
     }
     setIsCreatingUser(false);
+  };
+
+  const handleAddShift = async (e) => {
+    e.preventDefault();
+    if(!selectedEmpId) return;
+    try {
+      await addDoc(collection(db, "users", selectedEmpId, "schedules"), {
+        date: shiftDate,
+        time: shiftTime,
+        unit: shiftUnit,
+        status: 'Scheduled'
+      });
+      setShiftDate(''); setShiftTime(''); setShiftUnit('');
+      fetchEmpSchedule(selectedEmpId); // Refresh table
+    } catch (error) {
+      alert("Failed to assign shift.");
+    }
+  };
+
+  const handleDeleteShift = async (shiftId) => {
+    if(!confirm("Remove this shift?")) return;
+    try {
+      await deleteDoc(doc(db, "users", selectedEmpId, "schedules", shiftId));
+      fetchEmpSchedule(selectedEmpId);
+    } catch (error) {
+      alert("Failed to remove shift.");
+    }
   };
 
   // --- EMPLOYEE FUNCTIONS ---
@@ -687,7 +758,7 @@ const EmployeePortal = () => {
     }
   };
 
-  // 1. Listen for Firebase Auth Changes
+  // Listen for Firebase Auth Changes
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
@@ -798,7 +869,7 @@ const EmployeePortal = () => {
         </div>
 
         {adminActiveTab === 'dashboard' ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
               <h3 className="font-bold text-gray-800 mb-2">Pending Time Off</h3>
               <p className="text-3xl font-black text-orange-500">1</p>
@@ -808,6 +879,11 @@ const EmployeePortal = () => {
               <h3 className="font-bold text-gray-800 mb-2">Active Drivers</h3>
               <p className="text-3xl font-black text-green-500">12 / 15</p>
               <button className="mt-4 text-sm text-sky-600 font-bold">View Fleet &rarr;</button>
+            </div>
+            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+              <h3 className="font-bold text-gray-800 mb-2">Fleet Schedules</h3>
+              <p className="text-gray-500 text-sm mb-4">Assign shifts and trucks to drivers.</p>
+              <button onClick={() => setAdminActiveTab('scheduleManager')} className="bg-sky-600 text-white py-2 px-4 rounded font-bold text-sm w-full hover:bg-sky-700 transition-colors">Manage Schedules</button>
             </div>
             <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
               <h3 className="font-bold text-gray-800 mb-2">Manage Employees</h3>
@@ -821,76 +897,163 @@ const EmployeePortal = () => {
               <Icons.ArrowLeft className="h-4 w-4 mr-2" /> Back to Dashboard
             </button>
             
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              <div className="lg:col-span-1 bg-white p-6 rounded-xl border border-gray-200 shadow-sm h-fit">
-                <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center"><Icons.User className="h-5 w-5 mr-2 text-sky-600" /> Add New Employee</h3>
-                
-                {createMessage && (
-                  <div className={`p-3 rounded-lg mb-4 text-sm font-semibold border ${createMessage.type === 'success' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-600 border-red-200'}`}>
-                    {createMessage.text}
+            {/* DIRECTORY VIEW */}
+            {adminActiveTab === 'directory' && (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className="lg:col-span-1 bg-white p-6 rounded-xl border border-gray-200 shadow-sm h-fit">
+                  <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center"><Icons.User className="h-5 w-5 mr-2 text-sky-600" /> Add New Employee</h3>
+                  
+                  {createMessage && (
+                    <div className={`p-3 rounded-lg mb-4 text-sm font-semibold border ${createMessage.type === 'success' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-600 border-red-200'}`}>
+                      {createMessage.text}
+                    </div>
+                  )}
+
+                  <form onSubmit={handleCreateEmployee} className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-1">Full Name</label>
+                      <input required type="text" value={newEmpName} onChange={(e) => setNewEmpName(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" placeholder="John Doe" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-1">Email Address</label>
+                      <input required type="email" value={newEmpEmail} onChange={(e) => setNewEmpEmail(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" placeholder="driver@sarnetwork.com" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-1">Temporary Password</label>
+                      <input required type="password" value={newEmpPassword} onChange={(e) => setNewEmpPassword(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" placeholder="Min 6 characters" />
+                    </div>
+                    <button disabled={isCreatingUser} type="submit" className="w-full bg-sky-600 text-white py-3 rounded-lg font-bold hover:bg-sky-700 transition-colors disabled:opacity-50">
+                      {isCreatingUser ? "Creating..." : "Create Account"}
+                    </button>
+                  </form>
+                </div>
+
+                <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                  <div className="p-6 border-b border-gray-100 bg-slate-50">
+                    <h3 className="text-lg font-bold text-slate-900">Active Team Members</h3>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                      <thead className="bg-slate-100 text-slate-600 text-sm">
+                        <tr>
+                          <th className="p-4 font-semibold">Name</th>
+                          <th className="p-4 font-semibold">Email</th>
+                          <th className="p-4 font-semibold">Role</th>
+                          <th className="p-4 font-semibold">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {employeeList.map((emp) => (
+                          <tr key={emp.id} className="hover:bg-slate-50 transition-colors">
+                            <td className="p-4 font-bold text-slate-900">{emp.name || 'Admin User'}</td>
+                            <td className="p-4 text-slate-600">{emp.email}</td>
+                            <td className="p-4">
+                              <span className={`px-2 py-1 rounded-full text-xs font-bold uppercase ${emp.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-sky-100 text-sky-700'}`}>
+                                {emp.role || 'employee'}
+                              </span>
+                            </td>
+                            <td className="p-4">
+                              <span className="px-2 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700 uppercase">
+                                {emp.status || 'Active'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                        {employeeList.length === 0 && (
+                          <tr>
+                            <td colSpan="4" className="p-8 text-center text-gray-500 font-medium">Loading employee directory...</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* SCHEDULE MANAGER VIEW */}
+            {adminActiveTab === 'scheduleManager' && (
+              <div className="space-y-6">
+                <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                  <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center"><Icons.Calendar className="h-5 w-5 mr-2 text-sky-600" /> Dispatch Schedule Manager</h3>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">Select Driver to Manage</label>
+                  <select
+                    className="w-full md:w-1/2 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 bg-slate-50 font-bold"
+                    value={selectedEmpId}
+                    onChange={(e) => setSelectedEmpId(e.target.value)}
+                  >
+                    <option value="">-- Choose an Employee --</option>
+                    {employeeList.filter(emp => emp.role !== 'admin').map(emp => (
+                      <option key={emp.id} value={emp.id}>{emp.name} ({emp.email})</option>
+                    ))}
+                  </select>
+                </div>
+
+                {selectedEmpId && (
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    {/* Add Shift Form */}
+                    <div className="lg:col-span-1 bg-white p-6 rounded-xl border border-gray-200 shadow-sm h-fit">
+                      <h3 className="text-lg font-bold text-slate-900 mb-4">Assign New Shift</h3>
+                      <form onSubmit={handleAddShift} className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-bold text-slate-700 mb-1">Date</label>
+                          <input type="date" required value={shiftDate} onChange={(e) => setShiftDate(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-bold text-slate-700 mb-1">Shift Time</label>
+                          <input type="text" required placeholder="e.g., 8:00 AM - 4:00 PM" value={shiftTime} onChange={(e) => setShiftTime(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-bold text-slate-700 mb-1">Assigned Unit</label>
+                          <input type="text" required placeholder="e.g., Tow-402" value={shiftUnit} onChange={(e) => setShiftUnit(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" />
+                        </div>
+                        <button type="submit" className="w-full bg-green-600 text-white py-3 rounded-lg font-bold hover:bg-green-700 transition-colors shadow-lg">
+                          Save Shift
+                        </button>
+                      </form>
+                    </div>
+
+                    {/* Employee's Shift List */}
+                    <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                      <div className="p-6 border-b border-gray-100 bg-slate-50">
+                        <h3 className="text-lg font-bold text-slate-900">Driver's Calendar</h3>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left">
+                          <thead className="bg-slate-100 text-slate-600 text-sm">
+                            <tr>
+                              <th className="p-4 font-semibold">Date</th>
+                              <th className="p-4 font-semibold">Time</th>
+                              <th className="p-4 font-semibold">Unit</th>
+                              <th className="p-4 font-semibold text-center">Action</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {empSchedule.map((shift) => (
+                              <tr key={shift.id} className="hover:bg-slate-50 transition-colors">
+                                <td className="p-4 font-bold text-slate-900">{shift.date}</td>
+                                <td className="p-4 text-slate-600">{shift.time}</td>
+                                <td className="p-4 font-mono text-slate-500">{shift.unit}</td>
+                                <td className="p-4 text-center">
+                                  <button onClick={() => handleDeleteShift(shift.id)} className="text-red-500 hover:text-red-700 font-bold text-sm bg-red-50 px-3 py-1 rounded-md">
+                                    Remove
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                            {empSchedule.length === 0 && (
+                              <tr>
+                                <td colSpan="4" className="p-8 text-center text-gray-500 font-medium">No shifts assigned to this driver yet.</td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
                   </div>
                 )}
-
-                <form onSubmit={handleCreateEmployee} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-1">Full Name</label>
-                    <input required type="text" value={newEmpName} onChange={(e) => setNewEmpName(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" placeholder="John Doe" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-1">Email Address</label>
-                    <input required type="email" value={newEmpEmail} onChange={(e) => setNewEmpEmail(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" placeholder="driver@sarnetwork.com" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-1">Temporary Password</label>
-                    <input required type="password" value={newEmpPassword} onChange={(e) => setNewEmpPassword(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" placeholder="Min 6 characters" />
-                  </div>
-                  <button disabled={isCreatingUser} type="submit" className="w-full bg-sky-600 text-white py-3 rounded-lg font-bold hover:bg-sky-700 transition-colors disabled:opacity-50">
-                    {isCreatingUser ? "Creating..." : "Create Account"}
-                  </button>
-                </form>
               </div>
-
-              <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                <div className="p-6 border-b border-gray-100 bg-slate-50">
-                  <h3 className="text-lg font-bold text-slate-900">Active Team Members</h3>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left">
-                    <thead className="bg-slate-100 text-slate-600 text-sm">
-                      <tr>
-                        <th className="p-4 font-semibold">Name</th>
-                        <th className="p-4 font-semibold">Email</th>
-                        <th className="p-4 font-semibold">Role</th>
-                        <th className="p-4 font-semibold">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {employeeList.map((emp) => (
-                        <tr key={emp.id} className="hover:bg-slate-50 transition-colors">
-                          <td className="p-4 font-bold text-slate-900">{emp.name || 'Admin User'}</td>
-                          <td className="p-4 text-slate-600">{emp.email}</td>
-                          <td className="p-4">
-                            <span className={`px-2 py-1 rounded-full text-xs font-bold uppercase ${emp.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-sky-100 text-sky-700'}`}>
-                              {emp.role || 'employee'}
-                            </span>
-                          </td>
-                          <td className="p-4">
-                            <span className="px-2 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700 uppercase">
-                              {emp.status || 'Active'}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                      {employeeList.length === 0 && (
-                        <tr>
-                          <td colSpan="4" className="p-8 text-center text-gray-500 font-medium">Loading employee directory...</td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
+            )}
           </div>
         )}
       </div>
@@ -987,7 +1150,6 @@ const EmployeePortal = () => {
             <div>
               <div className="flex justify-between items-center mb-6 border-b pb-4">
                 <h3 className="text-2xl font-bold text-slate-900">My Schedule</h3>
-                <span className="bg-sky-100 text-sky-700 px-3 py-1 rounded-full text-sm font-bold">This Week</span>
               </div>
               
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
@@ -1001,22 +1163,18 @@ const EmployeePortal = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {/* Using visual placeholder data until you set up an Admin Calendar Tool */}
-                      {[
-                        { date: "Monday", time: "8:00 AM - 4:00 PM", unit: "Tow-402" },
-                        { date: "Tuesday", time: "8:00 AM - 4:00 PM", unit: "Tow-402" },
-                        { date: "Wednesday", time: "8:00 AM - 4:00 PM", unit: "Tow-402" },
-                        { date: "Thursday", time: "OFF", unit: "-" },
-                        { date: "Friday", time: "8:00 AM - 4:00 PM", unit: "Tow-405" },
-                      ].map((shift, i) => (
+                      {mySchedule.map((shift, i) => (
                         <tr key={i} className="hover:bg-slate-50 transition-colors">
                           <td className="p-4 font-semibold text-slate-800">{shift.date}</td>
-                          <td className="p-4 text-slate-600">
-                            {shift.time === 'OFF' ? <span className="px-2 py-1 bg-gray-100 text-gray-500 rounded font-bold text-xs uppercase">Off Duty</span> : shift.time}
-                          </td>
-                          <td className="p-4 text-slate-500 font-mono">{shift.unit}</td>
+                          <td className="p-4 text-slate-600">{shift.time}</td>
+                          <td className="p-4 text-slate-500 font-mono font-bold">{shift.unit}</td>
                         </tr>
                       ))}
+                      {mySchedule.length === 0 && (
+                        <tr>
+                          <td colSpan="3" className="p-8 text-center text-gray-500 font-medium">No upcoming shifts have been scheduled for you yet.</td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -1029,7 +1187,6 @@ const EmployeePortal = () => {
             <div>
               <h3 className="text-2xl font-bold text-slate-900 mb-6 border-b pb-4">Request Time Off</h3>
               
-              {/* Added PTO Balances up top! */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center">
                   <div className="p-4 bg-orange-100 text-orange-600 rounded-xl mr-4">
