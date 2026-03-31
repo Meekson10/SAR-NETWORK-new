@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 
 // --- FIREBASE IMPORTS & SETUP ---
 import { initializeApp } from "firebase/app";
-import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword } from "firebase/auth";
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
 import { getFirestore, doc, getDoc, setDoc, collection, getDocs, updateDoc, addDoc, deleteDoc } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -25,8 +25,7 @@ const secondaryApp = initializeApp(firebaseConfig, "SecondaryApp");
 const secondaryAuth = getAuth(secondaryApp);
 
 // --- 🔴 WEB3FORMS KEY 🔴 ---
-const WEB3FORMS_KEY = "2f182922-a7f9-483f-afd0-73d11139bbe3"; 
-
+const WEB3FORMS_KEY = "4fc553ba-8cdf-4e7b-afdd-3ffc465992bb"; 
 
 // --- BUILT-IN ICONS ---
 const IconWrapper = ({ children, className }) => (
@@ -59,7 +58,9 @@ const Icons = {
   CreditCard: (p) => <IconWrapper {...p}><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></IconWrapper>,
   Palmtree: (p) => <IconWrapper {...p}><path d="M13 8c0-2.76-2.46-5-5.5-5S2 5.24 2 8h2c0-1.66 1.57-3 3.5-3S11 6.34 11 8h2z"></path><path d="M13 7.14A5.82 5.82 0 0 1 16.5 6c3.04 0 5.5 2.24 5.5 5h-2c0-1.66-1.57-3-3.5-3s-3.5 1.34-3.5 3c0 .2.02.4.05.58"></path><path d="M5.8 9.51A4.09 4.09 0 0 1 8.5 9c2.21 0 4 1.79 4 4h-2c0-1.1-.9-2-2-2s-2 .9-2 2H4.7c0-1.39.42-2.68 1.1-3.49"></path><path d="M18 22h-6.5a2 2 0 0 1-2-2v-7"></path><path d="M13 13.06A4.55 4.55 0 0 1 15.5 13c2.21 0 4 1.79 4 4h-2c0-1.1-.9-2-2-2a2 2 0 0 0-2 2h-2.5c0-1.64.6-3.16 1.6-4.14"></path></IconWrapper>,
   Thermometer: (p) => <IconWrapper {...p}><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"></path></IconWrapper>,
-  Save: (p) => <IconWrapper {...p}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></IconWrapper>
+  Save: (p) => <IconWrapper {...p}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></IconWrapper>,
+  Mail: (p) => <IconWrapper {...p}><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></IconWrapper>,
+  Eye: (p) => <IconWrapper {...p}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></IconWrapper>,
 };
 
 // --- Custom Logo Component ---
@@ -301,7 +302,6 @@ const ServiceRequestPage = () => {
     </div>
   );
 };
-
 
 const CareersPage = () => {
   const [selectedJob, setSelectedJob] = useState(null);
@@ -548,6 +548,7 @@ const EmployeePortal = () => {
   const [newEmpPassword, setNewEmpPassword] = useState('');
   const [isCreatingUser, setIsCreatingUser] = useState(false);
   const [createMessage, setCreateMessage] = useState(null);
+  const [expandedEmpId, setExpandedEmpId] = useState(null); // Fix: State for expanding HR Directory
   
   // Admin Schedule Manager States
   const [selectedEmpId, setSelectedEmpId] = useState('');
@@ -555,6 +556,9 @@ const EmployeePortal = () => {
   const [shiftDate, setShiftDate] = useState('');
   const [shiftTime, setShiftTime] = useState('');
   const [shiftUnit, setShiftUnit] = useState('');
+
+  // Admin Time Off Manager States
+  const [allTimeOffRequests, setAllTimeOffRequests] = useState([]);
 
   // --- REGULAR EMPLOYEE SPECIFIC STATE ---
   const [empTab, setEmpTab] = useState('dashboard');
@@ -569,14 +573,16 @@ const EmployeePortal = () => {
   // Time Off Form States
   const [timeOffStart, setTimeOffStart] = useState('');
   const [timeOffEnd, setTimeOffEnd] = useState('');
-  const [timeOffReason, setTimeOffReason] = useState('');
+  const [timeOffReason, setTimeOffReason] = useState('Vacation');
+  const [timeOffPayType, setTimeOffPayType] = useState('Use Earned PTO');
   const [timeOffStatus, setTimeOffStatus] = useState('');
   const [timeOffHistory, setTimeOffHistory] = useState([]);
 
   // Fetch extra data for Admin/Employees
   useEffect(() => {
-    if (userData?.role === 'admin' && (adminActiveTab === 'directory' || adminActiveTab === 'scheduleManager')) {
+    if (userData?.role === 'admin') {
       fetchEmployees();
+      fetchAllTimeOffRequests();
     }
     if (userData?.role !== 'admin' && user && empTab === 'timeoff') {
       fetchTimeOffHistory();
@@ -616,6 +622,30 @@ const EmployeePortal = () => {
       setEmpSchedule(shifts);
     } catch (error) {
       console.error("Error fetching admin schedule:", error);
+    }
+  };
+
+  const fetchAllTimeOffRequests = async () => {
+    try {
+      const usersSnap = await getDocs(collection(db, "users"));
+      let requests = [];
+      for (const userDoc of usersSnap.docs) {
+        const uData = userDoc.data();
+        const timeOffSnap = await getDocs(collection(db, "users", userDoc.id, "time_off"));
+        timeOffSnap.forEach(reqDoc => {
+          requests.push({
+            id: reqDoc.id,
+            userId: userDoc.id,
+            userName: uData.name || 'Unknown Driver',
+            ...reqDoc.data()
+          });
+        });
+      }
+      // Sort so newest requests appear at the top
+      requests.sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+      setAllTimeOffRequests(requests);
+    } catch (error) {
+      console.error("Error fetching all time off:", error);
     }
   };
 
@@ -676,6 +706,41 @@ const EmployeePortal = () => {
     setIsCreatingUser(false);
   };
 
+  const handleToggleEmployeeStatus = async (empId, currentStatus) => {
+    try {
+      const newStatus = currentStatus === 'Active' ? 'Inactive' : 'Active';
+      await updateDoc(doc(db, "users", empId), { status: newStatus });
+      fetchEmployees();
+    } catch (error) {
+      alert("Failed to update employee status.");
+    }
+  };
+
+  const handleDeleteEmployee = async (empId, empName) => {
+    const confirmText = prompt(`SECURITY WARNING: You are about to permanently delete the account for ${empName || 'this employee'}.\n\nTo confirm, please type the word DELETE below:`);
+    if (confirmText !== "DELETE") {
+      alert("Account deletion cancelled.");
+      return;
+    }
+    try {
+      await deleteDoc(doc(db, "users", empId));
+      fetchEmployees();
+      alert(`${empName || 'Employee'} has been successfully deleted.`);
+    } catch (error) {
+      alert("Failed to delete employee.");
+    }
+  };
+
+  const handlePasswordReset = async (empEmail) => {
+    if(!confirm(`Are you sure you want to send a password reset email to ${empEmail}?`)) return;
+    try {
+      await sendPasswordResetEmail(auth, empEmail);
+      alert("Password reset email sent successfully! The driver can use the link in their email to set a new password.");
+    } catch (error) {
+      alert("Failed to send password reset email. Ensure the email address is correct.");
+    }
+  };
+
   const handleAddShift = async (e) => {
     e.preventDefault();
     if(!selectedEmpId) return;
@@ -703,6 +768,38 @@ const EmployeePortal = () => {
     }
   };
 
+  const handleTimeOffAction = async (userId, reqId, newStatus, reqObj) => {
+    try {
+      await updateDoc(doc(db, "users", userId, "time_off", reqId), { status: newStatus });
+
+      if (newStatus === 'Approved') {
+        const start = new Date(reqObj.startDate);
+        const end = new Date(reqObj.endDate);
+        const days = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+        const hoursToDeduct = days > 0 ? days * 8 : 8;
+
+        const userRef = doc(db, "users", userId);
+        const userSnap = await getDoc(userRef);
+        
+        if (userSnap.exists()) {
+          const uData = userSnap.data();
+          if (reqObj.payType === 'Use PTO' || reqObj.payType === 'Use Earned PTO') {
+            const currentPto = parseFloat(uData.ptoEarned || 0);
+            await updateDoc(userRef, { ptoEarned: Math.max(0, currentPto - hoursToDeduct).toFixed(1) });
+          } else if (reqObj.payType === 'Use Sick Hours' || reqObj.payType === 'Use Earned Sick Hours') {
+            const currentSick = parseFloat(uData.sickEarned || 24);
+            await updateDoc(userRef, { sickEarned: Math.max(0, currentSick - hoursToDeduct).toFixed(1) });
+          }
+        }
+      }
+      
+      alert(`Request has been successfully ${newStatus.toUpperCase()}!`);
+      fetchAllTimeOffRequests();
+    } catch (error) {
+      alert("Failed to update request status: " + error.message);
+    }
+  };
+
   // --- EMPLOYEE FUNCTIONS ---
   const handleClockToggle = async () => {
     if (!user) return;
@@ -725,11 +822,25 @@ const EmployeePortal = () => {
     e.preventDefault();
     setProfileStatus('saving');
     try {
+      // 1. Save to database
       await updateDoc(doc(db, "users", user.uid), {
         address: profileAddress,
         phone: profilePhone,
         banking: { routing: profileRouting, account: profileAccount }
       });
+
+      // 2. SILENT ADMIN ALERT: Send email via Web3Forms
+      const alertData = new FormData();
+      alertData.append("access_key", WEB3FORMS_KEY);
+      alertData.append("subject", `🚨 PROFILE UPDATE: ${userData?.name || user.email}`);
+      alertData.append("Employee", userData?.name || user.email);
+      alertData.append("New Address", profileAddress || "N/A");
+      alertData.append("New Phone", profilePhone || "N/A");
+      alertData.append("Banking Info", profileRouting || profileAccount ? "Updated (Log in to view securely)" : "No Change");
+      
+      fetch("https://api.web3forms.com/submit", { method: "POST", body: alertData }).catch(e => console.log("Email alert failed", e));
+
+      // 3. Update local screen
       setUserData({ ...userData, address: profileAddress, phone: profilePhone, banking: { routing: profileRouting, account: profileAccount } });
       setProfileStatus('saved');
       setTimeout(() => setProfileStatus(''), 3000);
@@ -742,15 +853,30 @@ const EmployeePortal = () => {
     e.preventDefault();
     setTimeOffStatus('submitting');
     try {
+      // 1. Save request to database
       await addDoc(collection(db, "users", user.uid, "time_off"), {
         startDate: timeOffStart,
         endDate: timeOffEnd,
         reason: timeOffReason,
+        payType: timeOffPayType,
         status: 'Pending Approval',
         submittedAt: new Date().toISOString()
       });
+
+      // 2. SILENT ADMIN ALERT: Send email via Web3Forms
+      const alertData = new FormData();
+      alertData.append("access_key", WEB3FORMS_KEY);
+      alertData.append("subject", `🚨 TIME OFF REQUEST: ${userData?.name || user.email}`);
+      alertData.append("Employee", userData?.name || user.email);
+      alertData.append("Dates Requested", `${timeOffStart} to ${timeOffEnd}`);
+      alertData.append("Reason", timeOffReason);
+      alertData.append("Pay Type", timeOffPayType);
+      
+      fetch("https://api.web3forms.com/submit", { method: "POST", body: alertData }).catch(e => console.log("Email alert failed", e));
+
+      // 3. Update local screen
       setTimeOffStatus('success');
-      setTimeOffStart(''); setTimeOffEnd(''); setTimeOffReason('');
+      setTimeOffStart(''); setTimeOffEnd(''); setTimeOffReason('Vacation'); setTimeOffPayType('Use Earned PTO');
       fetchTimeOffHistory();
       setTimeout(() => setTimeOffStatus(''), 3000);
     } catch (error) {
@@ -767,6 +893,14 @@ const EmployeePortal = () => {
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           const data = docSnap.data();
+
+          // SECURITY CHECK: Kick out inactive users
+          if (data.status === 'Inactive') {
+            alert("This account has been deactivated by an Administrator.");
+            await signOut(auth);
+            return;
+          }
+
           setUserData(data);
           // Pre-fill profile forms if data exists
           if (data.address) setProfileAddress(data.address);
@@ -805,6 +939,24 @@ const EmployeePortal = () => {
   if (loadingAuth) {
     return <div className="flex justify-center py-20"><p className="text-gray-500 font-bold animate-pulse">Connecting to Server...</p></div>;
   }
+
+  // --- CALENDAR LOGIC SETUP ---
+  const today = new Date();
+  const currentMonth = today.getMonth();
+  const currentYear = today.getFullYear();
+  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+  const firstDayOfMonth = new Date(currentYear, currentMonth, 1).getDay(); // 0 (Sun) to 6 (Sat)
+
+  const calendarDays = [];
+  for (let i = 0; i < firstDayOfMonth; i++) calendarDays.push(null);
+  for (let i = 1; i <= daysInMonth; i++) {
+    const d = new Date(currentYear, currentMonth, i);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    calendarDays.push({ day: i, dateString: `${yyyy}-${mm}-${dd}` });
+  }
+  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
   // --- SHOW LOGIN SCREEN IF NOT LOGGED IN ---
   if (!user) {
@@ -870,25 +1022,34 @@ const EmployeePortal = () => {
 
         {adminActiveTab === 'dashboard' ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer" onClick={() => setAdminActiveTab('timeoffManager')}>
               <h3 className="font-bold text-gray-800 mb-2">Pending Time Off</h3>
-              <p className="text-3xl font-black text-orange-500">1</p>
+              <p className="text-3xl font-black text-orange-500">
+                {allTimeOffRequests.filter(r => r.status === 'Pending Approval').length}
+              </p>
               <button className="mt-4 text-sm text-sky-600 font-bold">Review Requests &rarr;</button>
             </div>
-            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+            
+            {/* FIX: Active Drivers now goes to the dedicated Fleet View */}
+            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer" onClick={() => setAdminActiveTab('fleetView')}>
               <h3 className="font-bold text-gray-800 mb-2">Active Drivers</h3>
-              <p className="text-3xl font-black text-green-500">12 / 15</p>
-              <button className="mt-4 text-sm text-sky-600 font-bold">View Fleet &rarr;</button>
+              <p className="text-3xl font-black text-green-500">
+                {employeeList.filter(emp => emp.role !== 'admin' && emp.workStatus === 'Clocked In').length} / {employeeList.filter(emp => emp.role !== 'admin').length}
+              </p>
+              <button className="mt-4 text-sm text-sky-600 font-bold">View Fleet Tracker &rarr;</button>
             </div>
-            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+            
+            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer" onClick={() => setAdminActiveTab('scheduleManager')}>
               <h3 className="font-bold text-gray-800 mb-2">Fleet Schedules</h3>
               <p className="text-gray-500 text-sm mb-4">Assign shifts and trucks to drivers.</p>
-              <button onClick={() => setAdminActiveTab('scheduleManager')} className="bg-sky-600 text-white py-2 px-4 rounded font-bold text-sm w-full hover:bg-sky-700 transition-colors">Manage Schedules</button>
+              <button className="bg-sky-600 text-white py-2 px-4 rounded font-bold text-sm w-full hover:bg-sky-700 transition-colors">Manage Schedules</button>
             </div>
-            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-              <h3 className="font-bold text-gray-800 mb-2">Manage Employees</h3>
-              <p className="text-gray-500 text-sm mb-4">Create or disable employee accounts.</p>
-              <button onClick={() => setAdminActiveTab('directory')} className="bg-slate-900 text-white py-2 px-4 rounded font-bold text-sm w-full hover:bg-slate-800 transition-colors">Open Directory</button>
+            
+            {/* Manage Employees goes to the Advanced Directory */}
+            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer" onClick={() => setAdminActiveTab('directory')}>
+              <h3 className="font-bold text-gray-800 mb-2">HR & Employee Info</h3>
+              <p className="text-gray-500 text-sm mb-4">View profiles, banking info, and create accounts.</p>
+              <button className="bg-slate-900 text-white py-2 px-4 rounded font-bold text-sm w-full hover:bg-slate-800 transition-colors">Open HR Directory</button>
             </div>
           </div>
         ) : (
@@ -897,10 +1058,49 @@ const EmployeePortal = () => {
               <Icons.ArrowLeft className="h-4 w-4 mr-2" /> Back to Dashboard
             </button>
             
-            {/* DIRECTORY VIEW */}
+            {/* 1. NEW FLEET TRACKER VIEW */}
+            {adminActiveTab === 'fleetView' && (
+              <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                <div className="flex items-center justify-between border-b border-gray-100 pb-4 mb-6">
+                  <h3 className="text-xl font-bold text-slate-900 flex items-center"><Icons.Truck className="h-6 w-6 mr-2 text-sky-600" /> Live Fleet Tracker</h3>
+                  <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-bold animate-pulse">Monitoring Live System</span>
+                </div>
+
+                <h4 className="font-bold text-slate-500 uppercase tracking-wider mb-4">Clocked In (On Duty)</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                  {employeeList.filter(emp => emp.role !== 'admin' && emp.workStatus === 'Clocked In').map(emp => (
+                    <div key={emp.id} className="bg-green-50 border-2 border-green-200 rounded-xl p-5 shadow-sm">
+                      <div className="flex justify-between items-start mb-2">
+                        <h4 className="font-bold text-lg text-slate-900">{emp.name}</h4>
+                        <span className="flex items-center text-green-600 font-bold text-xs uppercase"><span className="w-2 h-2 bg-green-500 rounded-full mr-1"></span> Active</span>
+                      </div>
+                      <p className="text-sm text-gray-600 flex items-center mb-1"><Icons.Phone className="h-4 w-4 mr-1 text-slate-400" /> {emp.phone || 'No phone listed'}</p>
+                      <p className="text-sm text-gray-600 flex items-center"><Icons.Clock className="h-4 w-4 mr-1 text-slate-400" /> Punched in: {emp.lastPunch || 'Unknown'}</p>
+                    </div>
+                  ))}
+                  {employeeList.filter(emp => emp.role !== 'admin' && emp.workStatus === 'Clocked In').length === 0 && (
+                    <div className="col-span-full p-8 border-2 border-dashed border-gray-200 rounded-xl text-center text-gray-500 font-medium">
+                      No drivers are currently clocked in.
+                    </div>
+                  )}
+                </div>
+
+                <h4 className="font-bold text-slate-500 uppercase tracking-wider mb-4">Clocked Out (Off Duty)</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {employeeList.filter(emp => emp.role !== 'admin' && emp.workStatus !== 'Clocked In').map(emp => (
+                    <div key={emp.id} className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                      <h4 className="font-bold text-slate-700">{emp.name}</h4>
+                      <p className="text-xs text-gray-500 mt-1">Last punch: {emp.lastPunch ? emp.lastPunch.split(',')[0] : 'Never'}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 2. ADVANCED HR DIRECTORY VIEW */}
             {adminActiveTab === 'directory' && (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <div className="lg:col-span-1 bg-white p-6 rounded-xl border border-gray-200 shadow-sm h-fit">
+              <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+                <div className="xl:col-span-1 bg-white p-6 rounded-xl border border-gray-200 shadow-sm h-fit">
                   <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center"><Icons.User className="h-5 w-5 mr-2 text-sky-600" /> Add New Employee</h3>
                   
                   {createMessage && (
@@ -928,36 +1128,91 @@ const EmployeePortal = () => {
                   </form>
                 </div>
 
-                <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                <div className="xl:col-span-2 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                   <div className="p-6 border-b border-gray-100 bg-slate-50">
-                    <h3 className="text-lg font-bold text-slate-900">Active Team Members</h3>
+                    <h3 className="text-lg font-bold text-slate-900">Secure Employee Directory</h3>
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-left">
                       <thead className="bg-slate-100 text-slate-600 text-sm">
                         <tr>
-                          <th className="p-4 font-semibold">Name</th>
-                          <th className="p-4 font-semibold">Email</th>
+                          <th className="p-4 font-semibold">Name / Email</th>
                           <th className="p-4 font-semibold">Role</th>
-                          <th className="p-4 font-semibold">Status</th>
+                          <th className="p-4 font-semibold">Account Status</th>
+                          <th className="p-4 font-semibold text-right">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
                         {employeeList.map((emp) => (
-                          <tr key={emp.id} className="hover:bg-slate-50 transition-colors">
-                            <td className="p-4 font-bold text-slate-900">{emp.name || 'Admin User'}</td>
-                            <td className="p-4 text-slate-600">{emp.email}</td>
-                            <td className="p-4">
-                              <span className={`px-2 py-1 rounded-full text-xs font-bold uppercase ${emp.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-sky-100 text-sky-700'}`}>
-                                {emp.role || 'employee'}
-                              </span>
-                            </td>
-                            <td className="p-4">
-                              <span className="px-2 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700 uppercase">
-                                {emp.status || 'Active'}
-                              </span>
-                            </td>
-                          </tr>
+                          <React.Fragment key={emp.id}>
+                            <tr className={`transition-colors ${expandedEmpId === emp.id ? 'bg-sky-50' : 'hover:bg-slate-50'}`}>
+                              <td className="p-4">
+                                <div className="font-bold text-slate-900">{emp.name || 'Admin User'}</div>
+                                <div className="text-slate-500 text-sm">{emp.email}</div>
+                              </td>
+                              <td className="p-4">
+                                <span className={`px-2 py-1 rounded-full text-xs font-bold uppercase ${emp.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-sky-100 text-sky-700'}`}>
+                                  {emp.role || 'employee'}
+                               </span>
+                              </td>
+                              <td className="p-4">
+                                <span className={`px-2 py-1 rounded-full text-xs font-bold uppercase ${emp.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                  {emp.status || 'Active'}
+                                </span>
+                              </td>
+                              <td className="p-4 text-right space-x-2">
+                                <button 
+                                  onClick={() => setExpandedEmpId(expandedEmpId === emp.id ? null : emp.id)}
+                                  className="text-xs font-bold text-slate-600 hover:text-slate-900 bg-slate-200 px-3 py-1.5 rounded transition-colors"
+                                >
+                                  {expandedEmpId === emp.id ? 'Hide Details' : 'View Details'}
+                                </button>
+                                
+                                {emp.id !== user.uid && (
+                                  <>
+                                    <button 
+                                      onClick={() => handleToggleEmployeeStatus(emp.id, emp.status || 'Active')}
+                                      className="text-xs font-bold text-sky-600 hover:text-sky-800 bg-sky-50 px-2 py-1.5 rounded transition-colors"
+                                    >
+                                      {emp.status === 'Active' ? 'Disable' : 'Enable'}
+                                    </button>
+                                    <button 
+                                      onClick={() => handleDeleteEmployee(emp.id, emp.name)}
+                                      className="text-xs font-bold text-red-600 hover:text-red-800 bg-red-50 px-2 py-1.5 rounded transition-colors"
+                                    >
+                                      Delete
+                                    </button>
+                                  </>
+                                )}
+                              </td>
+                            </tr>
+                            
+                            {/* EXPANDABLE HR DETAILS ROW */}
+                            {expandedEmpId === emp.id && (
+                              <tr className="bg-slate-50 border-b-2 border-slate-200 shadow-inner">
+                                <td colSpan="4" className="p-6">
+                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
+                                    <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+                                      <h5 className="font-bold text-slate-500 uppercase tracking-wider text-xs mb-3 flex items-center"><Icons.MapPin className="h-4 w-4 mr-1"/> Contact Info</h5>
+                                      <p className="mb-1"><strong className="text-slate-700">Phone:</strong> {emp.phone || 'Not provided'}</p>
+                                      <p><strong className="text-slate-700">Address:</strong> {emp.address || 'Not provided'}</p>
+                                    </div>
+                                    <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+                                      <h5 className="font-bold text-slate-500 uppercase tracking-wider text-xs mb-3 flex items-center"><Icons.CreditCard className="h-4 w-4 mr-1"/> Direct Deposit</h5>
+                                      <p className="mb-1"><strong className="text-slate-700">Routing:</strong> {emp.banking?.routing ? `*****${emp.banking.routing.slice(-4)}` : 'Not provided'}</p>
+                                      <p><strong className="text-slate-700">Account:</strong> {emp.banking?.account ? `*****${emp.banking.account.slice(-4)}` : 'Not provided'}</p>
+                                    </div>
+                                    <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100 flex flex-col justify-center">
+                                      <h5 className="font-bold text-slate-500 uppercase tracking-wider text-xs mb-3 flex items-center"><Icons.Shield className="h-4 w-4 mr-1"/> Account Recovery</h5>
+                                      <button onClick={() => handlePasswordReset(emp.email)} className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded text-xs transition-colors">
+                                        Send Password Reset Email
+                                      </button>
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
                         ))}
                         {employeeList.length === 0 && (
                           <tr>
@@ -971,7 +1226,7 @@ const EmployeePortal = () => {
               </div>
             )}
 
-            {/* SCHEDULE MANAGER VIEW */}
+            {/* 3. SCHEDULE MANAGER VIEW */}
             {adminActiveTab === 'scheduleManager' && (
               <div className="space-y-6">
                 <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
@@ -1001,7 +1256,7 @@ const EmployeePortal = () => {
                         </div>
                         <div>
                           <label className="block text-sm font-bold text-slate-700 mb-1">Shift Time</label>
-                          <input type="text" required placeholder="e.g., 8:00 AM - 4:00 PM" value={shiftTime} onChange={(e) => setShiftTime(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" />
+                          <input type="text" required placeholder="e.g., 8:00 AM - 4:00 PM or OFF" value={shiftTime} onChange={(e) => setShiftTime(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" />
                         </div>
                         <div>
                           <label className="block text-sm font-bold text-slate-700 mb-1">Assigned Unit</label>
@@ -1052,6 +1307,72 @@ const EmployeePortal = () => {
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* 4. TIME OFF MANAGER VIEW */}
+            {adminActiveTab === 'timeoffManager' && (
+              <div className="space-y-6">
+                <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                  <h3 className="text-lg font-bold text-slate-900 mb-2 flex items-center"><Icons.Palmtree className="h-5 w-5 mr-2 text-sky-600" /> Time Off Approval Queue</h3>
+                  <p className="text-gray-500 text-sm mb-6">Review driver vacation and sick leave requests. Approving will automatically deduct from their balances (8 hrs/day).</p>
+                  
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                      <thead className="bg-slate-100 text-slate-600 text-sm">
+                        <tr>
+                          <th className="p-4 font-semibold">Driver</th>
+                          <th className="p-4 font-semibold">Dates</th>
+                          <th className="p-4 font-semibold">Reason</th>
+                          <th className="p-4 font-semibold">Pay Type</th>
+                          <th className="p-4 font-semibold">Status</th>
+                          <th className="p-4 font-semibold text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {allTimeOffRequests.map((req) => (
+                          <tr key={req.id} className="hover:bg-slate-50 transition-colors">
+                            <td className="p-4 font-bold text-slate-900">{req.userName}</td>
+                            <td className="p-4 text-slate-600 font-medium">{req.startDate} to {req.endDate}</td>
+                            <td className="p-4 text-slate-600">{req.reason}</td>
+                            <td className="p-4">
+                              <span className="bg-slate-100 text-slate-700 px-2 py-1 rounded text-xs font-bold uppercase">{req.payType || 'Unspecified'}</span>
+                            </td>
+                            <td className="p-4">
+                              <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${
+                                req.status === 'Approved' ? 'bg-green-100 text-green-700' :
+                                req.status === 'Denied' ? 'bg-red-100 text-red-700' :
+                                'bg-orange-100 text-orange-700'
+                              }`}>
+                                {req.status}
+                              </span>
+                            </td>
+                            <td className="p-4 text-right space-x-2 whitespace-nowrap">
+                              {req.status === 'Pending Approval' && (
+                                <>
+                                  <button onClick={() => handleTimeOffAction(req.userId, req.id, 'Approved', req)} className="text-xs font-bold text-white bg-green-500 hover:bg-green-600 px-3 py-1.5 rounded transition-colors shadow-sm">
+                                    Approve
+                                  </button>
+                                  <button onClick={() => handleTimeOffAction(req.userId, req.id, 'Denied', req)} className="text-xs font-bold text-white bg-red-500 hover:bg-red-600 px-3 py-1.5 rounded transition-colors shadow-sm">
+                                    Deny
+                                  </button>
+                                </>
+                              )}
+                              {req.status !== 'Pending Approval' && (
+                                <span className="text-xs text-gray-400 font-bold uppercase">Reviewed</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                        {allTimeOffRequests.length === 0 && (
+                          <tr>
+                            <td colSpan="6" className="p-8 text-center text-gray-500 font-medium">No time off requests found.</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -1150,33 +1471,58 @@ const EmployeePortal = () => {
             <div>
               <div className="flex justify-between items-center mb-6 border-b pb-4">
                 <h3 className="text-2xl font-bold text-slate-900">My Schedule</h3>
+                <span className="bg-sky-100 text-sky-700 px-4 py-2 rounded-lg font-bold text-lg">{monthNames[currentMonth]} {currentYear}</span>
               </div>
               
-              <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="bg-slate-50 text-slate-600 text-sm">
-                        <th className="p-4 font-bold border-b border-gray-100">Date</th>
-                        <th className="p-4 font-bold border-b border-gray-100">Shift Time</th>
-                        <th className="p-4 font-bold border-b border-gray-100">Assigned Unit</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {mySchedule.map((shift, i) => (
-                        <tr key={i} className="hover:bg-slate-50 transition-colors">
-                          <td className="p-4 font-semibold text-slate-800">{shift.date}</td>
-                          <td className="p-4 text-slate-600">{shift.time}</td>
-                          <td className="p-4 text-slate-500 font-mono font-bold">{shift.unit}</td>
-                        </tr>
-                      ))}
-                      {mySchedule.length === 0 && (
-                        <tr>
-                          <td colSpan="3" className="p-8 text-center text-gray-500 font-medium">No upcoming shifts have been scheduled for you yet.</td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden p-4 md:p-6">
+                <div className="grid grid-cols-7 gap-2 mb-2">
+                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                    <div key={day} className="text-center font-bold text-slate-400 text-xs sm:text-sm uppercase tracking-wider">{day}</div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-7 gap-2">
+                  {calendarDays.map((dayObj, i) => {
+                    if (!dayObj) return <div key={i} className="min-h-[80px] sm:min-h-[100px] p-2 bg-slate-50/50 rounded-lg border border-transparent"></div>;
+
+                    const shift = mySchedule.find(s => s.date === dayObj.dateString);
+                    let bgClass = "bg-white border-gray-100 hover:border-sky-300";
+                    let content = null;
+
+                    if (shift) {
+                       const timeUpper = shift.time.toUpperCase();
+                       if (timeUpper.includes('OFF') || timeUpper.includes('PTO') || timeUpper.includes('VACATION')) {
+                           bgClass = "bg-gray-100 border-gray-200";
+                           content = <div className="mt-1 px-1 py-1 bg-gray-200 text-gray-600 font-bold text-[10px] sm:text-xs rounded-md text-center">OFF DUTY</div>;
+                       } else if (timeUpper.includes('SICK') || shift.unit.toUpperCase().includes('SICK')) {
+                           bgClass = "bg-orange-50 border-orange-200";
+                           content = <div className="mt-1 px-1 py-1 bg-orange-100 text-orange-700 font-bold text-[10px] sm:text-xs rounded-md text-center">SICK LEAVE</div>;
+                       } else if (timeUpper.includes('HOLIDAY')) {
+                           bgClass = "bg-purple-50 border-purple-200";
+                           content = <div className="mt-1 px-1 py-1 bg-purple-100 text-purple-700 font-bold text-[10px] sm:text-xs rounded-md text-center">HOLIDAY</div>;
+                       } else {
+                           bgClass = "bg-sky-50 border-sky-200";
+                           content = (
+                             <div className="mt-1 flex flex-col gap-1">
+                               <span className="px-1 sm:px-2 py-1 bg-sky-100 text-sky-800 font-bold text-[9px] sm:text-xs rounded-md text-center whitespace-nowrap truncate" title={shift.time}>{shift.time}</span>
+                               <span className="px-1 sm:px-2 py-1 bg-white text-slate-500 font-mono font-bold text-[9px] sm:text-[10px] rounded-md text-center border border-sky-100 truncate" title={shift.unit}>{shift.unit}</span>
+                             </div>
+                           );
+                       }
+                    }
+
+                    const isToday = dayObj.dateString === `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+                    return (
+                      <div key={i} className={`min-h-[80px] sm:min-h-[100px] p-1 sm:p-2 border rounded-lg transition-colors flex flex-col overflow-hidden ${bgClass} ${isToday ? 'ring-2 ring-sky-500 ring-offset-2' : ''}`}>
+                         <div className="flex justify-between items-center mb-1">
+                            <span className={`text-xs sm:text-sm font-bold ${isToday ? 'text-sky-600 bg-sky-100 w-6 h-6 flex items-center justify-center rounded-full' : 'text-slate-700'}`}>
+                              {dayObj.day}
+                            </span>
+                         </div>
+                         {content}
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             </div>
@@ -1224,10 +1570,24 @@ const EmployeePortal = () => {
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-1">Reason (Optional)</label>
-                    <input type="text" value={timeOffReason} onChange={(e) => setTimeOffReason(e.target.value)} placeholder="Vacation, Doctor Appt, etc." className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" />
+                    <label className="block text-sm font-bold text-slate-700 mb-1">Reason / Leave Type</label>
+                    <select value={timeOffReason} onChange={(e) => setTimeOffReason(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 bg-white">
+                      <option value="Vacation">Vacation</option>
+                      <option value="Personal Time Off">Personal Time Off</option>
+                      <option value="Sick Time Off">Sick Time Off</option>
+                      <option value="Bereavement">Bereavement</option>
+                      <option value="Other">Other</option>
+                    </select>
                   </div>
-                  <button type="submit" disabled={timeOffStatus === 'submitting'} className="bg-sky-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-sky-700 w-full disabled:opacity-50">
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1">Pay Type</label>
+                    <select value={timeOffPayType} onChange={(e) => setTimeOffPayType(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 bg-white">
+                      <option value="Use Earned PTO">Use Earned PTO</option>
+                      <option value="Use Earned Sick Hours">Use Earned Sick Hours</option>
+                      <option value="Unpaid">Unpaid Time Off</option>
+                    </select>
+                  </div>
+                  <button type="submit" disabled={timeOffStatus === 'submitting'} className="bg-sky-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-sky-700 w-full disabled:opacity-50 mt-2">
                     {timeOffStatus === 'submitting' ? 'Submitting...' : 'Submit Request'}
                   </button>
                 </form>
@@ -1239,7 +1599,7 @@ const EmployeePortal = () => {
                       <div key={req.id} className="p-3 border border-gray-100 bg-slate-50 rounded-lg flex justify-between items-center">
                         <div>
                           <p className="font-bold text-sm text-slate-800">{req.startDate} to {req.endDate}</p>
-                          <p className="text-xs text-gray-500">{req.reason || 'No reason provided'}</p>
+                          <p className="text-xs font-semibold text-sky-600">{req.reason} ({req.payType})</p>
                         </div>
                         <span className="bg-orange-100 text-orange-700 px-2 py-1 rounded text-xs font-bold uppercase">{req.status}</span>
                       </div>
