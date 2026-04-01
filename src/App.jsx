@@ -210,6 +210,7 @@ const AboutPage = () => (
 const ServiceRequestPage = () => {
   const [submitted, setSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLocating, setIsLocating] = useState(false);
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({ type: '', location: '', phone: '', vehicle: '' });
 
@@ -242,6 +243,31 @@ const ServiceRequestPage = () => {
       alert("Something went wrong. Please call us directly!");
     }
     setIsSubmitting(false);
+  };
+
+  const handleGetLocation = () => {
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by your browser.");
+      return;
+    }
+    
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        setFormData(prev => ({ ...prev, location: `GPS: ${latitude.toFixed(5)}, ${longitude.toFixed(5)}` }));
+        setIsLocating(false);
+      },
+      (error) => {
+        alert(`Location access failed: ${error.message}. Please type your location manually or ensure your browser has location permissions enabled.`);
+        setIsLocating(false);
+      },
+      { 
+        enableHighAccuracy: true, 
+        timeout: 10000, // Forces it to stop and show an error if it takes longer than 10 seconds
+        maximumAge: 0 
+      } 
+    );
   };
 
   if (submitted) {
@@ -277,9 +303,33 @@ const ServiceRequestPage = () => {
             <div className="space-y-6">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Your Location</label>
-                <input type="text" placeholder="123 Highway Rd, Exit 4..." className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" value={formData.location} onChange={(e) => setFormData({...formData, location: e.target.value})} />
+                <div className="relative">
+                  <Icons.MapPin className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                  <input 
+                    type="text" 
+                    placeholder="123 Highway Rd, Exit 4..." 
+                    className="pl-10 w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
+                    value={formData.location}
+                    onChange={(e) => setFormData({...formData, location: e.target.value})}
+                  />
+                </div>
+                <button 
+                  type="button"
+                  onClick={handleGetLocation}
+                  disabled={isLocating}
+                  className="mt-2 text-sky-600 text-sm font-bold flex items-center hover:text-sky-700 disabled:opacity-50 transition-opacity"
+                >
+                  <Icons.MapPin className="h-4 w-4 mr-1" /> 
+                  {isLocating ? "Finding your exact location..." : "Share my exact GPS location"}
+                </button>
               </div>
-              <button onClick={() => setStep(3)} disabled={!formData.location} className="w-full bg-sky-600 text-white py-3 rounded-lg font-bold hover:bg-sky-700 disabled:opacity-50">Next Step</button>
+              <button 
+                onClick={() => setStep(3)}
+                disabled={!formData.location}
+                className="w-full bg-sky-600 text-white py-3 rounded-lg font-bold hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Next Step
+              </button>
             </div>
           )}
           {step === 3 && (
@@ -548,7 +598,7 @@ const EmployeePortal = () => {
   const [newEmpPassword, setNewEmpPassword] = useState('');
   const [isCreatingUser, setIsCreatingUser] = useState(false);
   const [createMessage, setCreateMessage] = useState(null);
-  const [expandedEmpId, setExpandedEmpId] = useState(null); // Fix: State for expanding HR Directory
+  const [expandedEmpId, setExpandedEmpId] = useState(null); // State for expanding HR Directory
   
   // Admin Schedule Manager States
   const [selectedEmpId, setSelectedEmpId] = useState('');
@@ -822,14 +872,13 @@ const EmployeePortal = () => {
     e.preventDefault();
     setProfileStatus('saving');
     try {
-      // 1. Save to database
       await updateDoc(doc(db, "users", user.uid), {
         address: profileAddress,
         phone: profilePhone,
         banking: { routing: profileRouting, account: profileAccount }
       });
 
-      // 2. SILENT ADMIN ALERT: Send email via Web3Forms
+      // SILENT ADMIN ALERT: Send email via Web3Forms
       const alertData = new FormData();
       alertData.append("access_key", WEB3FORMS_KEY);
       alertData.append("subject", `🚨 PROFILE UPDATE: ${userData?.name || user.email}`);
@@ -840,7 +889,6 @@ const EmployeePortal = () => {
       
       fetch("https://api.web3forms.com/submit", { method: "POST", body: alertData }).catch(e => console.log("Email alert failed", e));
 
-      // 3. Update local screen
       setUserData({ ...userData, address: profileAddress, phone: profilePhone, banking: { routing: profileRouting, account: profileAccount } });
       setProfileStatus('saved');
       setTimeout(() => setProfileStatus(''), 3000);
@@ -853,7 +901,6 @@ const EmployeePortal = () => {
     e.preventDefault();
     setTimeOffStatus('submitting');
     try {
-      // 1. Save request to database
       await addDoc(collection(db, "users", user.uid, "time_off"), {
         startDate: timeOffStart,
         endDate: timeOffEnd,
@@ -863,7 +910,7 @@ const EmployeePortal = () => {
         submittedAt: new Date().toISOString()
       });
 
-      // 2. SILENT ADMIN ALERT: Send email via Web3Forms
+      // SILENT ADMIN ALERT: Send email via Web3Forms
       const alertData = new FormData();
       alertData.append("access_key", WEB3FORMS_KEY);
       alertData.append("subject", `🚨 TIME OFF REQUEST: ${userData?.name || user.email}`);
@@ -874,7 +921,6 @@ const EmployeePortal = () => {
       
       fetch("https://api.web3forms.com/submit", { method: "POST", body: alertData }).catch(e => console.log("Email alert failed", e));
 
-      // 3. Update local screen
       setTimeOffStatus('success');
       setTimeOffStart(''); setTimeOffEnd(''); setTimeOffReason('Vacation'); setTimeOffPayType('Use Earned PTO');
       fetchTimeOffHistory();
@@ -1015,9 +1061,14 @@ const EmployeePortal = () => {
             <h2 className="text-2xl font-black flex items-center"><Icons.Shield className="h-6 w-6 mr-2" /> Admin Dashboard</h2>
             <p className="text-sky-200 text-sm">Welcome back, Boss. Logged in as: {user.email}</p>
           </div>
-          <button onClick={handleLogout} className="flex items-center px-4 py-2 bg-sky-800 hover:bg-red-600 rounded-lg transition-colors font-bold text-sm">
-            <Icons.LogOut className="h-4 w-4 mr-2" /> Sign Out
-          </button>
+          <div className="flex space-x-3">
+            <button onClick={() => setAdminActiveTab('profile')} className="flex items-center px-4 py-2 bg-sky-800 hover:bg-sky-700 rounded-lg transition-colors font-bold text-sm">
+              <Icons.User className="h-4 w-4 mr-2" /> Profile
+            </button>
+            <button onClick={handleLogout} className="flex items-center px-4 py-2 bg-sky-800 hover:bg-red-600 rounded-lg transition-colors font-bold text-sm">
+              <Icons.LogOut className="h-4 w-4 mr-2" /> Sign Out
+            </button>
+          </div>
         </div>
 
         {adminActiveTab === 'dashboard' ? (
@@ -1030,7 +1081,6 @@ const EmployeePortal = () => {
               <button className="mt-4 text-sm text-sky-600 font-bold">Review Requests &rarr;</button>
             </div>
             
-            {/* FIX: Active Drivers now goes to the dedicated Fleet View */}
             <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer" onClick={() => setAdminActiveTab('fleetView')}>
               <h3 className="font-bold text-gray-800 mb-2">Active Drivers</h3>
               <p className="text-3xl font-black text-green-500">
@@ -1045,7 +1095,6 @@ const EmployeePortal = () => {
               <button className="bg-sky-600 text-white py-2 px-4 rounded font-bold text-sm w-full hover:bg-sky-700 transition-colors">Manage Schedules</button>
             </div>
             
-            {/* Manage Employees goes to the Advanced Directory */}
             <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer" onClick={() => setAdminActiveTab('directory')}>
               <h3 className="font-bold text-gray-800 mb-2">HR & Employee Info</h3>
               <p className="text-gray-500 text-sm mb-4">View profiles, banking info, and create accounts.</p>
@@ -1373,6 +1422,52 @@ const EmployeePortal = () => {
                     </table>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* 5. ADMIN PROFILE VIEW */}
+            {adminActiveTab === 'profile' && (
+              <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                <h3 className="text-2xl font-bold text-slate-900 mb-6 border-b pb-4 flex items-center">
+                  <Icons.User className="h-6 w-6 mr-2 text-sky-600"/> Admin Profile & Banking Info
+                </h3>
+                
+                <form onSubmit={handleUpdateProfile} className="space-y-8 max-w-2xl">
+                  {profileStatus === 'saved' && <div className="bg-green-50 text-green-700 p-3 rounded-lg font-bold border border-green-200">Profile updated securely!</div>}
+                  
+                  {/* Contact Info */}
+                  <div className="space-y-4">
+                    <h4 className="text-lg font-bold text-slate-700 flex items-center"><Icons.MapPin className="h-5 w-5 mr-2 text-sky-600"/> Contact Information</h4>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Mailing Address</label>
+                      <input type="text" value={profileAddress} onChange={(e) => setProfileAddress(e.target.value)} placeholder="123 Main St, Apt 4B, City, State, ZIP" className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Phone Number</label>
+                      <input type="tel" value={profilePhone} onChange={(e) => setProfilePhone(e.target.value)} placeholder="(555) 123-4567" className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" />
+                    </div>
+                  </div>
+
+                  {/* Banking Info */}
+                  <div className="space-y-4 pt-6 border-t border-gray-100">
+                    <h4 className="text-lg font-bold text-slate-700 flex items-center"><Icons.CreditCard className="h-5 w-5 mr-2 text-sky-600"/> Direct Deposit Information</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Routing Number</label>
+                        <input type="password" value={profileRouting} onChange={(e) => setProfileRouting(e.target.value)} placeholder="•••••••••" className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Account Number</label>
+                        <input type="password" value={profileAccount} onChange={(e) => setProfileAccount(e.target.value)} placeholder="••••••••••" className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" />
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-500 font-medium"><Icons.Shield className="h-3 w-3 inline mr-1" /> Banking information is encrypted and securely saved to Firebase.</p>
+                  </div>
+
+                  <button type="submit" disabled={profileStatus === 'saving'} className="bg-slate-900 text-white px-8 py-3 rounded-lg font-bold hover:bg-slate-800 disabled:opacity-50 flex items-center">
+                    <Icons.Save className="h-5 w-5 mr-2" /> {profileStatus === 'saving' ? 'Saving...' : 'Save Profile Changes'}
+                  </button>
+                </form>
               </div>
             )}
           </div>
