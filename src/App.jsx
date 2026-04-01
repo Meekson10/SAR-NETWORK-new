@@ -25,7 +25,7 @@ const secondaryApp = initializeApp(firebaseConfig, "SecondaryApp");
 const secondaryAuth = getAuth(secondaryApp);
 
 // --- 🔴 WEB3FORMS KEY 🔴 ---
-const WEB3FORMS_KEY = "4fc553ba-8cdf-4e7b-afdd-3ffc465992bb"; 
+const WEB3FORMS_KEY = "2f182922-a7f9-483f-afd0-73d11139bbe3"; 
 
 // --- BUILT-IN ICONS ---
 const IconWrapper = ({ children, className }) => (
