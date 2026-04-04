@@ -48,6 +48,7 @@ const Icons = {
   User: (p) => <IconWrapper {...p}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></IconWrapper>,
   LogOut: (p) => <IconWrapper {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></IconWrapper>,
   ChevronRight: (p) => <IconWrapper {...p}><polyline points="9 18 15 12 9 6"></polyline></IconWrapper>,
+  ChevronLeft: (p) => <IconWrapper {...p}><polyline points="15 18 9 12 15 6"></polyline></IconWrapper>,
   Star: (p) => <IconWrapper {...p}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></IconWrapper>,
   Shield: (p) => <IconWrapper {...p}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></IconWrapper>,
   Users: (p) => <IconWrapper {...p}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></IconWrapper>,
@@ -61,6 +62,7 @@ const Icons = {
   Save: (p) => <IconWrapper {...p}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></IconWrapper>,
   Mail: (p) => <IconWrapper {...p}><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></IconWrapper>,
   Eye: (p) => <IconWrapper {...p}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></IconWrapper>,
+  Bell: (p) => <IconWrapper {...p}><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></IconWrapper>
 };
 
 // --- Custom Logo Component ---
@@ -264,7 +266,7 @@ const ServiceRequestPage = () => {
       },
       { 
         enableHighAccuracy: true, 
-        timeout: 10000, // Forces it to stop and show an error if it takes longer than 10 seconds
+        timeout: 10000, 
         maximumAge: 0 
       } 
     );
@@ -355,13 +357,25 @@ const ServiceRequestPage = () => {
 
 const CareersPage = () => {
   const [selectedJob, setSelectedJob] = useState(null);
-  const [applicationStatus, setApplicationStatus] = useState('idle');
+  const [applicationStatus, setApplicationStatus] = useState('idle'); // idle, submitting, success
+  const [liveJobs, setLiveJobs] = useState([]);
+  const [isLoadingJobs, setIsLoadingJobs] = useState(true);
 
-  const jobs = [
-    { title: "Tow Truck Operator", type: "Full-time", loc: "Newark Area", pay: "$25-35/hr" },
-    { title: "Dispatch Coordinator", type: "Full-time", loc: "Remote/Hybrid", pay: "$20-28/hr" },
-    { title: "Roadside Technician", type: "Part-time", loc: "Jersey City", pay: "$22-30/hr" },
-  ];
+  useEffect(() => {
+    const getLiveJobs = async () => {
+      try {
+        const snap = await getDocs(collection(db, "jobs"));
+        const fetched = [];
+        snap.forEach(doc => fetched.push({ id: doc.id, ...doc.data() }));
+        setLiveJobs(fetched);
+      } catch (err) {
+        console.error("Error fetching live jobs:", err);
+      } finally {
+        setIsLoadingJobs(false);
+      }
+    };
+    getLiveJobs();
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -476,18 +490,59 @@ const CareersPage = () => {
     <div className="max-w-7xl mx-auto py-16 px-4 sm:px-6 lg:px-8">
       <div className="text-center mb-16">
         <h2 className="text-3xl font-extrabold text-slate-900 sm:text-4xl">Join the SAR Network Team</h2>
-        <p className="mt-4 text-xl text-gray-500 max-w-2xl mx-auto">We are always looking for dedicated professionals to help us keep drivers safe and moving.</p>
+        <p className="mt-4 text-xl text-gray-500 max-w-2xl mx-auto">
+          We are always looking for dedicated professionals to help us keep drivers safe and moving.
+        </p>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {jobs.map((job, idx) => (
-          <div key={idx} className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-100">
-            <div className="p-6">
-              <h3 className="text-xl font-bold text-slate-900 mb-2">{job.title}</h3>
-              <button onClick={() => { setSelectedJob(job); window.scrollTo(0, 0); }} className="mt-4 w-full py-2 border-2 border-sky-600 text-sky-600 font-bold rounded-lg hover:bg-sky-50 transition-colors">Apply Now</button>
-            </div>
+        {isLoadingJobs ? (
+          <div className="col-span-full py-12 text-center text-gray-500 font-bold animate-pulse">
+            Loading live job openings...
           </div>
-        ))}
+        ) : (
+          liveJobs.map((job) => (
+            <div key={job.id} className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-100 hover:shadow-xl transition-all hover:-translate-y-1">
+              <div className="p-6 flex flex-col h-full">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="p-2 bg-sky-100 text-sky-600 rounded-lg">
+                    <Icons.Briefcase className="h-6 w-6" />
+                  </div>
+                  <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full font-bold uppercase">Hiring</span>
+                </div>
+                <h3 className="text-xl font-bold text-slate-900 mb-2">{job.title}</h3>
+                
+                {/* NEW: Job Description rendering */}
+                {job.desc && <p className="text-sm text-gray-600 mb-4 line-clamp-3 flex-1">{job.desc}</p>}
+                
+                <div className="space-y-2 text-sm text-gray-600 mb-6 mt-auto pt-4 border-t border-gray-100">
+                  <p className="flex items-center"><Icons.MapPin className="h-4 w-4 mr-2" /> {job.loc}</p>
+                  <p className="flex items-center"><Icons.Clock className="h-4 w-4 mr-2" /> {job.type}</p>
+                  <p className="flex items-center text-slate-900 font-semibold"><span className="text-green-600 mr-2">$</span> {job.pay}</p>
+                </div>
+                <button 
+                  onClick={() => { setSelectedJob(job); window.scrollTo(0, 0); }}
+                  className="w-full py-2 border-2 border-sky-600 text-sky-600 font-bold rounded-lg hover:bg-sky-50 transition-colors"
+                >
+                  Apply Now
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+        
+        {/* FIXED: General Application Card Restored */}
+        <div className="bg-slate-900 rounded-xl shadow-lg p-6 flex flex-col justify-center items-center text-center text-white transition-all hover:-translate-y-1">
+          <h3 className="text-xl font-bold mb-2">Don't see your role?</h3>
+          <p className="text-gray-300 mb-6 text-sm">Send us your resume and we'll keep you on file for future openings.</p>
+          <button 
+             onClick={() => { setSelectedJob({ title: "General Application", loc: "Various Locations", type: "Full/Part-time", pay: "Competitive" }); window.scrollTo(0, 0); }}
+             className="flex items-center text-sky-400 font-bold hover:text-sky-300"
+          >
+            Submit General Application <Icons.ChevronRight className="h-5 w-5 ml-1" />
+          </button>
+        </div>
+
       </div>
     </div>
   );
@@ -557,10 +612,19 @@ const ContactPage = () => {
                   <input required name="Last Name" type="text" className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" />
                 </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
-                <input required name="Email" type="email" className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" />
+              
+              {/* NEW: Optional Phone Number */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+                  <input required name="Email" type="email" className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Phone <span className="text-gray-400 font-normal">(Optional)</span></label>
+                  <input name="Phone" type="tel" className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" />
+                </div>
               </div>
+
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Message</label>
                 <textarea required name="Message" rows={4} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500"></textarea>
@@ -610,6 +674,14 @@ const EmployeePortal = () => {
   // Admin Time Off Manager States
   const [allTimeOffRequests, setAllTimeOffRequests] = useState([]);
 
+  // Admin Job Manager States
+  const [adminJobs, setAdminJobs] = useState([]);
+  const [newJobTitle, setNewJobTitle] = useState('');
+  const [newJobType, setNewJobType] = useState('Full-time');
+  const [newJobLoc, setNewJobLoc] = useState('');
+  const [newJobPay, setNewJobPay] = useState('');
+  const [newJobDesc, setNewJobDesc] = useState(''); // NEW: Job description state
+
   // --- REGULAR EMPLOYEE SPECIFIC STATE ---
   const [empTab, setEmpTab] = useState('dashboard');
   // Profile Form States
@@ -618,8 +690,13 @@ const EmployeePortal = () => {
   const [profileRouting, setProfileRouting] = useState('');
   const [profileAccount, setProfileAccount] = useState('');
   const [profileStatus, setProfileStatus] = useState('');
-  // Employee Schedule State
+  
+  // Employee Schedule State & Calendar Modals
   const [mySchedule, setMySchedule] = useState([]);
+  const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth());
+  const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
+  const [selectedShiftModal, setSelectedShiftModal] = useState(null); // NEW: For clicking a day
+  
   // Time Off Form States
   const [timeOffStart, setTimeOffStart] = useState('');
   const [timeOffEnd, setTimeOffEnd] = useState('');
@@ -627,18 +704,25 @@ const EmployeePortal = () => {
   const [timeOffPayType, setTimeOffPayType] = useState('Use Earned PTO');
   const [timeOffStatus, setTimeOffStatus] = useState('');
   const [timeOffHistory, setTimeOffHistory] = useState([]);
+  
+  // Employee Notifications
+  const [notifications, setNotifications] = useState([]);
 
   // Fetch extra data for Admin/Employees
   useEffect(() => {
     if (userData?.role === 'admin') {
       fetchEmployees();
       fetchAllTimeOffRequests();
+      fetchAdminJobs();
     }
     if (userData?.role !== 'admin' && user && empTab === 'timeoff') {
       fetchTimeOffHistory();
     }
     if (userData?.role !== 'admin' && user && empTab === 'schedule') {
       fetchMySchedule();
+    }
+    if (userData?.role !== 'admin' && user && empTab === 'dashboard') {
+      fetchMyNotifications();
     }
   }, [adminActiveTab, userData, empTab]);
 
@@ -722,6 +806,31 @@ const EmployeePortal = () => {
       setTimeOffHistory(requests);
     } catch (error) {
       console.error("Error fetching time off:", error);
+    }
+  };
+
+  const fetchAdminJobs = async () => {
+    try {
+      const snap = await getDocs(collection(db, "jobs"));
+      const j = [];
+      snap.forEach(doc => j.push({ id: doc.id, ...doc.data() }));
+      j.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+      setAdminJobs(j);
+    } catch (error) {
+      console.error("Error fetching admin jobs:", error);
+    }
+  };
+  
+  const fetchMyNotifications = async () => {
+    if(!user) return;
+    try {
+      const snap = await getDocs(collection(db, "users", user.uid, "notifications"));
+      const notifs = [];
+      snap.forEach(doc => notifs.push({ id: doc.id, ...doc.data() }));
+      notifs.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      setNotifications(notifs);
+    } catch (error) {
+      console.error("Error fetching notifications", error);
     }
   };
 
@@ -835,18 +944,58 @@ const EmployeePortal = () => {
           const uData = userSnap.data();
           if (reqObj.payType === 'Use PTO' || reqObj.payType === 'Use Earned PTO') {
             const currentPto = parseFloat(uData.ptoEarned || 0);
-            await updateDoc(userRef, { ptoEarned: Math.max(0, currentPto - hoursToDeduct).toFixed(1) });
+            await updateDoc(userRef, { ptoEarned: Math.max(0, currentPto - hoursToDeduct).toFixed(2) });
           } else if (reqObj.payType === 'Use Sick Hours' || reqObj.payType === 'Use Earned Sick Hours') {
             const currentSick = parseFloat(uData.sickEarned || 24);
-            await updateDoc(userRef, { sickEarned: Math.max(0, currentSick - hoursToDeduct).toFixed(1) });
+            await updateDoc(userRef, { sickEarned: Math.max(0, currentSick - hoursToDeduct).toFixed(2) });
           }
         }
       }
       
-      alert(`Request has been successfully ${newStatus.toUpperCase()}!`);
+      // NEW: Create an in-app notification for the employee
+      await addDoc(collection(db, "users", userId, "notifications"), {
+        message: `Your time-off request for ${reqObj.startDate} has been ${newStatus.toUpperCase()}.`,
+        createdAt: new Date().toISOString(),
+        read: false
+      });
+      
+      alert(`Request has been successfully ${newStatus.toUpperCase()} and the employee has been notified.`);
       fetchAllTimeOffRequests();
     } catch (error) {
       alert("Failed to update request status: " + error.message);
+    }
+  };
+
+  const handleAddJob = async (e) => {
+    e.preventDefault();
+    try {
+      await addDoc(collection(db, "jobs"), {
+        title: newJobTitle,
+        desc: newJobDesc, // NEW: Added job description
+        type: newJobType,
+        loc: newJobLoc,
+        pay: newJobPay,
+        createdAt: new Date().toISOString()
+      });
+      setNewJobTitle('');
+      setNewJobDesc('');
+      setNewJobType('Full-time');
+      setNewJobLoc('');
+      setNewJobPay('');
+      fetchAdminJobs();
+      alert("Job posted successfully!");
+    } catch (error) {
+      alert("Failed to post job.");
+    }
+  };
+
+  const handleDeleteJob = async (jobId) => {
+    if(!confirm("Are you sure you want to permanently delete this job posting?")) return;
+    try {
+      await deleteDoc(doc(db, "jobs", jobId));
+      fetchAdminJobs();
+    } catch (error) {
+      alert("Failed to delete job.");
     }
   };
 
@@ -855,16 +1004,38 @@ const EmployeePortal = () => {
     if (!user) return;
     const isCurrentlyClockedIn = userData?.workStatus === 'Clocked In';
     const newStatus = isCurrentlyClockedIn ? 'Clocked Out' : 'Clocked In';
-    const timestamp = new Date().toLocaleString();
+    const nowISO = new Date().toISOString(); // NEW: Store as ISO for precise math
+    
+    let updates = { 
+      workStatus: newStatus,
+      lastPunch: nowISO 
+    };
+
+    // NEW: If clocking out, calculate precise hours worked and accrue PTO/Sick
+    if (isCurrentlyClockedIn && userData.lastPunch) {
+      const startTime = new Date(userData.lastPunch).getTime();
+      const endTime = new Date(nowISO).getTime();
+      
+      if (!isNaN(startTime)) {
+        // Calculate exact hours elapsed
+        const hoursElapsed = (endTime - startTime) / (1000 * 60 * 60);
+        const currentHours = parseFloat(userData.hoursWorked || 0) + hoursElapsed;
+        
+        // Placeholder Accrual System: Earns 0.02 hours of PTO & Sick per hour worked
+        const currentPto = parseFloat(userData.ptoEarned || 0) + (hoursElapsed * 0.02);
+        const currentSick = parseFloat(userData.sickEarned || 24) + (hoursElapsed * 0.02); // Defaults to 24 start
+
+        updates.hoursWorked = currentHours.toFixed(2);
+        updates.ptoEarned = currentPto.toFixed(2);
+        updates.sickEarned = currentSick.toFixed(2);
+      }
+    }
 
     try {
-      await updateDoc(doc(db, "users", user.uid), { 
-        workStatus: newStatus,
-        lastPunch: timestamp
-      });
-      setUserData({ ...userData, workStatus: newStatus, lastPunch: timestamp });
+      await updateDoc(doc(db, "users", user.uid), updates);
+      setUserData({ ...userData, ...updates });
     } catch (error) {
-      alert("Failed to clock in. Check connection.");
+      alert("Failed to clock in/out. Check connection.");
     }
   };
 
@@ -929,6 +1100,13 @@ const EmployeePortal = () => {
       setTimeOffStatus('error');
     }
   };
+  
+  const handleMarkNotificationRead = async (notifId) => {
+    try {
+      await updateDoc(doc(db, "users", user.uid, "notifications", notifId), { read: true });
+      fetchMyNotifications();
+    } catch (e) { console.log(e); }
+  }
 
   // Listen for Firebase Auth Changes
   useEffect(() => {
@@ -987,22 +1165,28 @@ const EmployeePortal = () => {
   }
 
   // --- CALENDAR LOGIC SETUP ---
-  const today = new Date();
-  const currentMonth = today.getMonth();
-  const currentYear = today.getFullYear();
-  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
-  const firstDayOfMonth = new Date(currentYear, currentMonth, 1).getDay(); // 0 (Sun) to 6 (Sat)
+  const daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
+  const firstDayOfMonth = new Date(calendarYear, calendarMonth, 1).getDay(); // 0 (Sun) to 6 (Sat)
 
   const calendarDays = [];
   for (let i = 0; i < firstDayOfMonth; i++) calendarDays.push(null);
   for (let i = 1; i <= daysInMonth; i++) {
-    const d = new Date(currentYear, currentMonth, i);
+    const d = new Date(calendarYear, calendarMonth, i);
     const yyyy = d.getFullYear();
     const mm = String(d.getMonth() + 1).padStart(2, '0');
     const dd = String(d.getDate()).padStart(2, '0');
     calendarDays.push({ day: i, dateString: `${yyyy}-${mm}-${dd}` });
   }
   const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  
+  const handlePrevMonth = () => {
+    if (calendarMonth === 0) { setCalendarMonth(11); setCalendarYear(y => y - 1); }
+    else { setCalendarMonth(m => m - 1); }
+  }
+  const handleNextMonth = () => {
+    if (calendarMonth === 11) { setCalendarMonth(0); setCalendarYear(y => y + 1); }
+    else { setCalendarMonth(m => m + 1); }
+  }
 
   // --- SHOW LOGIN SCREEN IF NOT LOGGED IN ---
   if (!user) {
@@ -1072,7 +1256,7 @@ const EmployeePortal = () => {
         </div>
 
         {adminActiveTab === 'dashboard' ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
             <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer" onClick={() => setAdminActiveTab('timeoffManager')}>
               <h3 className="font-bold text-gray-800 mb-2">Pending Time Off</h3>
               <p className="text-3xl font-black text-orange-500">
@@ -1100,6 +1284,15 @@ const EmployeePortal = () => {
               <p className="text-gray-500 text-sm mb-4">View profiles, banking info, and create accounts.</p>
               <button className="bg-slate-900 text-white py-2 px-4 rounded font-bold text-sm w-full hover:bg-slate-800 transition-colors">Open HR Directory</button>
             </div>
+
+            {/* NEW JOB BOARD CARD */}
+            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer" onClick={() => setAdminActiveTab('jobManager')}>
+              <h3 className="font-bold text-gray-800 mb-2">Job Postings</h3>
+              <p className="text-3xl font-black text-blue-500">
+                {adminJobs.length}
+              </p>
+              <button className="mt-4 text-sm text-sky-600 font-bold">Manage Job Board &rarr;</button>
+            </div>
           </div>
         ) : (
           <div className="space-y-6">
@@ -1124,7 +1317,9 @@ const EmployeePortal = () => {
                         <span className="flex items-center text-green-600 font-bold text-xs uppercase"><span className="w-2 h-2 bg-green-500 rounded-full mr-1"></span> Active</span>
                       </div>
                       <p className="text-sm text-gray-600 flex items-center mb-1"><Icons.Phone className="h-4 w-4 mr-1 text-slate-400" /> {emp.phone || 'No phone listed'}</p>
-                      <p className="text-sm text-gray-600 flex items-center"><Icons.Clock className="h-4 w-4 mr-1 text-slate-400" /> Punched in: {emp.lastPunch || 'Unknown'}</p>
+                      <p className="text-sm text-gray-600 flex items-center">
+                        <Icons.Clock className="h-4 w-4 mr-1 text-slate-400" /> Punched in: {emp.lastPunch ? new Date(emp.lastPunch).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Unknown'}
+                      </p>
                     </div>
                   ))}
                   {employeeList.filter(emp => emp.role !== 'admin' && emp.workStatus === 'Clocked In').length === 0 && (
@@ -1139,7 +1334,7 @@ const EmployeePortal = () => {
                   {employeeList.filter(emp => emp.role !== 'admin' && emp.workStatus !== 'Clocked In').map(emp => (
                     <div key={emp.id} className="bg-slate-50 border border-slate-200 rounded-xl p-4">
                       <h4 className="font-bold text-slate-700">{emp.name}</h4>
-                      <p className="text-xs text-gray-500 mt-1">Last punch: {emp.lastPunch ? emp.lastPunch.split(',')[0] : 'Never'}</p>
+                      <p className="text-xs text-gray-500 mt-1">Last punch: {emp.lastPunch ? new Date(emp.lastPunch).toLocaleDateString([], {month:'short', day:'numeric'}) : 'Never'}</p>
                     </div>
                   ))}
                 </div>
@@ -1236,11 +1431,18 @@ const EmployeePortal = () => {
                               </td>
                             </tr>
                             
-                            {/* EXPANDABLE HR DETAILS ROW */}
+                            {/* EXPANDABLE HR DETAILS ROW WITH ADMIN HOURS OVEVIEW */}
                             {expandedEmpId === emp.id && (
                               <tr className="bg-slate-50 border-b-2 border-slate-200 shadow-inner">
                                 <td colSpan="4" className="p-6">
-                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
+                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 text-sm">
+                                    {/* NEW: Admin views total hours, pto, sick */}
+                                    <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+                                      <h5 className="font-bold text-slate-500 uppercase tracking-wider text-xs mb-3 flex items-center"><Icons.Clock className="h-4 w-4 mr-1"/> Hours & Balances</h5>
+                                      <p className="mb-1"><strong className="text-slate-700">Total Hours:</strong> {emp.hoursWorked || '0.00'}</p>
+                                      <p className="mb-1"><strong className="text-slate-700">PTO Earned:</strong> {emp.ptoEarned || '0.00'}</p>
+                                      <p><strong className="text-slate-700">Sick Avail:</strong> {emp.sickEarned || '24.00'}</p>
+                                    </div>
                                     <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
                                       <h5 className="font-bold text-slate-500 uppercase tracking-wider text-xs mb-3 flex items-center"><Icons.MapPin className="h-4 w-4 mr-1"/> Contact Info</h5>
                                       <p className="mb-1"><strong className="text-slate-700">Phone:</strong> {emp.phone || 'Not provided'}</p>
@@ -1254,7 +1456,7 @@ const EmployeePortal = () => {
                                     <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100 flex flex-col justify-center">
                                       <h5 className="font-bold text-slate-500 uppercase tracking-wider text-xs mb-3 flex items-center"><Icons.Shield className="h-4 w-4 mr-1"/> Account Recovery</h5>
                                       <button onClick={() => handlePasswordReset(emp.email)} className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded text-xs transition-colors">
-                                        Send Password Reset Email
+                                        Send Password Reset
                                       </button>
                                     </div>
                                   </div>
@@ -1425,7 +1627,87 @@ const EmployeePortal = () => {
               </div>
             )}
 
-            {/* 5. ADMIN PROFILE VIEW */}
+            {/* 5. JOB BOARD MANAGER VIEW */}
+            {adminActiveTab === 'jobManager' && (
+              <div className="space-y-6">
+                <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                  <h3 className="text-lg font-bold text-slate-900 mb-2 flex items-center"><Icons.Briefcase className="h-5 w-5 mr-2 text-sky-600" /> Public Job Board Manager</h3>
+                  <p className="text-gray-500 text-sm mb-6">Jobs posted here will instantly appear on the public Careers page.</p>
+                  
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    {/* Add Job Form */}
+                    <div className="lg:col-span-1 bg-slate-50 p-6 rounded-xl border border-slate-200 h-fit">
+                      <h4 className="font-bold text-slate-800 mb-4">Post New Opening</h4>
+                      <form onSubmit={handleAddJob} className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-bold text-slate-700 mb-1">Job Title</label>
+                          <input required type="text" value={newJobTitle} onChange={(e) => setNewJobTitle(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" placeholder="e.g. Tow Truck Operator" />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-bold text-slate-700 mb-1">Employment Type</label>
+                          <select value={newJobType} onChange={(e) => setNewJobType(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 bg-white">
+                            <option value="Full-time">Full-time</option>
+                            <option value="Part-time">Part-time</option>
+                            <option value="Contract">Contract</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-bold text-slate-700 mb-1">Location</label>
+                          <input required type="text" value={newJobLoc} onChange={(e) => setNewJobLoc(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" placeholder="e.g. Newark Area" />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-bold text-slate-700 mb-1">Pay Rate</label>
+                          <input required type="text" value={newJobPay} onChange={(e) => setNewJobPay(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" placeholder="e.g. $25-35/hr" />
+                        </div>
+                        {/* NEW: Job Description Field */}
+                        <div>
+                          <label className="block text-sm font-bold text-slate-700 mb-1">Job Description</label>
+                          <textarea required rows={3} value={newJobDesc} onChange={(e) => setNewJobDesc(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" placeholder="Briefly describe responsibilities..."></textarea>
+                        </div>
+                        <button type="submit" className="w-full bg-sky-600 text-white py-3 rounded-lg font-bold hover:bg-sky-700 transition-colors">
+                          Post Job
+                        </button>
+                      </form>
+                    </div>
+
+                    {/* Active Jobs Table */}
+                    <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 overflow-hidden">
+                      <table className="w-full text-left">
+                        <thead className="bg-slate-100 text-slate-600 text-sm">
+                          <tr>
+                            <th className="p-4 font-semibold">Job Title</th>
+                            <th className="p-4 font-semibold">Type & Loc</th>
+                            <th className="p-4 font-semibold">Pay Rate</th>
+                            <th className="p-4 font-semibold text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {adminJobs.map((job) => (
+                            <tr key={job.id} className="hover:bg-slate-50">
+                              <td className="p-4 font-bold text-slate-900">{job.title}</td>
+                              <td className="p-4 text-slate-600 text-sm">{job.type} • {job.loc}</td>
+                              <td className="p-4 text-green-600 font-bold">{job.pay}</td>
+                              <td className="p-4 text-right">
+                                <button onClick={() => handleDeleteJob(job.id)} className="text-xs font-bold text-red-600 hover:text-red-800 bg-red-50 px-3 py-1.5 rounded transition-colors">
+                                  Delete
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                          {adminJobs.length === 0 && (
+                            <tr>
+                              <td colSpan="4" className="p-8 text-center text-gray-500 font-medium">No jobs currently posted to the public site.</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 6. ADMIN PROFILE VIEW */}
             {adminActiveTab === 'profile' && (
               <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
                 <h3 className="text-2xl font-bold text-slate-900 mb-6 border-b pb-4 flex items-center">
@@ -1479,6 +1761,21 @@ const EmployeePortal = () => {
   // --- REGULAR EMPLOYEE VIEW ---
   return (
     <div className="max-w-6xl mx-auto py-8 px-4">
+      {/* NEW: Shift Details Popup Modal */}
+      {selectedShiftModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setSelectedShiftModal(null)}>
+          <div className="bg-white rounded-2xl p-8 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+             <h3 className="text-2xl font-black text-slate-900 mb-6 border-b pb-2">Shift Details</h3>
+             <div className="space-y-4 text-slate-700">
+               <p><strong className="text-slate-900 block text-xs uppercase tracking-wider mb-1">Date</strong> {selectedShiftModal.date}</p>
+               <p><strong className="text-slate-900 block text-xs uppercase tracking-wider mb-1">Time</strong> {selectedShiftModal.time}</p>
+               <p><strong className="text-slate-900 block text-xs uppercase tracking-wider mb-1">Assigned Unit</strong> <span className="font-mono bg-slate-100 px-2 py-1 rounded">{selectedShiftModal.unit}</span></p>
+             </div>
+             <button onClick={() => setSelectedShiftModal(null)} className="mt-8 w-full bg-sky-600 text-white py-3 rounded-xl font-bold hover:bg-sky-700 transition-colors shadow-lg">Close Details</button>
+          </div>
+        </div>
+      )}
+
       {/* Employee Header */}
       <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-8 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
         <div className="flex items-center mb-4 md:mb-0">
@@ -1519,43 +1816,62 @@ const EmployeePortal = () => {
           
           {/* TAB 1: TIME CLOCK & STATS */}
           {empTab === 'dashboard' && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-              <div className="text-center">
-                <h3 className="text-2xl font-bold text-slate-900 mb-2">Shift Status</h3>
-                <p className="text-gray-500 mb-8">Record your hours securely to the database.</p>
-                
-                <div className={`p-6 rounded-2xl border-2 mb-8 ${userData?.workStatus === 'Clocked In' ? 'bg-green-50 border-green-200' : 'bg-slate-50 border-slate-200'}`}>
-                  <p className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">Current Status</p>
-                  <p className={`text-3xl font-black ${userData?.workStatus === 'Clocked In' ? 'text-green-600' : 'text-slate-700'}`}>
-                    {userData?.workStatus || 'Clocked Out'}
-                  </p>
-                  {userData?.lastPunch && (
-                    <p className="text-sm text-gray-500 mt-2">Last punch: {userData.lastPunch}</p>
-                  )}
+            <div>
+              {/* NEW: Employee In-App Notifications Alert */}
+              {notifications.filter(n => !n.read).length > 0 && (
+                <div className="bg-sky-50 border-l-4 border-sky-500 p-5 rounded-r-xl mb-8 shadow-sm">
+                  <h4 className="font-bold text-sky-800 flex items-center mb-2"><Icons.AlertTriangle className="h-5 w-5 mr-2"/> New Notifications</h4>
+                  <ul className="space-y-3">
+                    {notifications.filter(n => !n.read).map(n => (
+                       <li key={n.id} className="flex flex-col sm:flex-row sm:justify-between sm:items-center bg-white p-3 rounded-lg border border-sky-100 gap-3">
+                         <span className="text-sm font-medium text-slate-700">{n.message}</span>
+                         <button onClick={() => handleMarkNotificationRead(n.id)} className="text-xs bg-sky-100 text-sky-700 px-3 py-1.5 rounded-md font-bold hover:bg-sky-200 shrink-0">Mark as Read</button>
+                       </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+                <div className="text-center">
+                  <h3 className="text-2xl font-bold text-slate-900 mb-2">Shift Status</h3>
+                  <p className="text-gray-500 mb-8">Record your exact hours to the database.</p>
+                  
+                  <div className={`p-6 rounded-2xl border-2 mb-8 ${userData?.workStatus === 'Clocked In' ? 'bg-green-50 border-green-200' : 'bg-slate-50 border-slate-200'}`}>
+                    <p className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">Current Status</p>
+                    <p className={`text-3xl font-black ${userData?.workStatus === 'Clocked In' ? 'text-green-600' : 'text-slate-700'}`}>
+                      {userData?.workStatus || 'Clocked Out'}
+                    </p>
+                    {userData?.lastPunch && (
+                      <p className="text-sm text-gray-500 mt-2">
+                        Last punch: {new Date(userData.lastPunch).toLocaleString([], {month:'short', day:'numeric', hour: '2-digit', minute:'2-digit'})}
+                      </p>
+                    )}
+                  </div>
+
+                  <button 
+                    onClick={handleClockToggle}
+                    className={`w-full py-4 rounded-xl font-bold text-lg text-white shadow-lg transition-transform hover:-translate-y-1 ${userData?.workStatus === 'Clocked In' ? 'bg-red-500 hover:bg-red-600 shadow-red-500/30' : 'bg-green-500 hover:bg-green-600 shadow-green-500/30'}`}
+                  >
+                    {userData?.workStatus === 'Clocked In' ? 'CLOCK OUT' : 'CLOCK IN'}
+                  </button>
                 </div>
 
-                <button 
-                  onClick={handleClockToggle}
-                  className={`w-full py-4 rounded-xl font-bold text-lg text-white shadow-lg transition-transform hover:-translate-y-1 ${userData?.workStatus === 'Clocked In' ? 'bg-red-500 hover:bg-red-600 shadow-red-500/30' : 'bg-green-500 hover:bg-green-600 shadow-green-500/30'}`}
-                >
-                  {userData?.workStatus === 'Clocked In' ? 'CLOCK OUT' : 'CLOCK IN'}
-                </button>
-              </div>
-
-              <div className="space-y-6">
-                <div className="bg-slate-50 p-6 rounded-2xl border border-gray-100 h-full">
-                  <h4 className="font-bold text-slate-700 mb-6 text-lg">Current Pay Period Stats</h4>
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center p-5 bg-white rounded-xl shadow-sm border border-gray-100">
-                      <div className="flex items-center"><Icons.Clock className="h-6 w-6 text-sky-500 mr-3"/> <span className="font-bold text-slate-700">Hours Worked</span></div>
-                      <span className="text-2xl font-black text-slate-900">{userData?.hoursWorked || '0.0'} <span className="text-sm font-medium text-gray-500">hrs</span></span>
+                <div className="space-y-6">
+                  <div className="bg-slate-50 p-6 rounded-2xl border border-gray-100 h-full">
+                    <h4 className="font-bold text-slate-700 mb-6 text-lg">Your Hours & Accruals</h4>
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center p-5 bg-white rounded-xl shadow-sm border border-gray-100">
+                        <div className="flex items-center"><Icons.Clock className="h-6 w-6 text-sky-500 mr-3"/> <span className="font-bold text-slate-700">Total Hours</span></div>
+                        <span className="text-2xl font-black text-slate-900">{userData?.hoursWorked || '0.00'} <span className="text-sm font-medium text-gray-500">hrs</span></span>
+                      </div>
+                      <div className="flex justify-between items-center p-5 bg-white rounded-xl shadow-sm border border-gray-100">
+                        <div className="flex items-center"><Icons.Palmtree className="h-6 w-6 text-green-500 mr-3"/> <span className="font-bold text-slate-700">PTO Earned</span></div>
+                        <span className="text-2xl font-black text-slate-900">{userData?.ptoEarned || '0.00'} <span className="text-sm font-medium text-gray-500">hrs</span></span>
+                      </div>
                     </div>
-                    <div className="flex justify-between items-center p-5 bg-white rounded-xl shadow-sm border border-gray-100">
-                      <div className="flex items-center"><Icons.Palmtree className="h-6 w-6 text-green-500 mr-3"/> <span className="font-bold text-slate-700">PTO Earned</span></div>
-                      <span className="text-2xl font-black text-slate-900">{userData?.ptoEarned || '0.0'} <span className="text-sm font-medium text-gray-500">hrs</span></span>
-                    </div>
+                    <p className="text-xs text-gray-400 mt-6 text-center">Your exact clocked hours accurately accumulate here.</p>
                   </div>
-                  <p className="text-xs text-gray-400 mt-6 text-center">Stats automatically sync with Admin dispatch timesheets.</p>
                 </div>
               </div>
             </div>
@@ -1564,9 +1880,15 @@ const EmployeePortal = () => {
           {/* TAB 1.5: SCHEDULE CALENDAR */}
           {empTab === 'schedule' && (
             <div>
-              <div className="flex justify-between items-center mb-6 border-b pb-4">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 border-b pb-4 gap-4">
                 <h3 className="text-2xl font-bold text-slate-900">My Schedule</h3>
-                <span className="bg-sky-100 text-sky-700 px-4 py-2 rounded-lg font-bold text-lg">{monthNames[currentMonth]} {currentYear}</span>
+                
+                {/* NEW: Calendar Month Navigation Controls */}
+                <div className="flex items-center bg-sky-50 rounded-lg p-1">
+                  <button onClick={handlePrevMonth} className="p-2 text-sky-700 hover:bg-sky-200 rounded-md transition-colors"><Icons.ChevronLeft className="h-5 w-5" /></button>
+                  <span className="px-4 font-bold text-sky-900 min-w-[140px] text-center">{monthNames[calendarMonth]} {calendarYear}</span>
+                  <button onClick={handleNextMonth} className="p-2 text-sky-700 hover:bg-sky-200 rounded-md transition-colors"><Icons.ChevronRight className="h-5 w-5" /></button>
+                </div>
               </div>
               
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden p-4 md:p-6">
@@ -1584,20 +1906,23 @@ const EmployeePortal = () => {
                     let content = null;
 
                     if (shift) {
+                       // NEW: Made clicking a shift open the details modal
                        const timeUpper = shift.time.toUpperCase();
+                       bgClass += " cursor-pointer shadow-sm hover:shadow-md"; // Added hover effects
+                       
                        if (timeUpper.includes('OFF') || timeUpper.includes('PTO') || timeUpper.includes('VACATION')) {
-                           bgClass = "bg-gray-100 border-gray-200";
+                           bgClass = "bg-gray-100 border-gray-200 cursor-pointer";
                            content = <div className="mt-1 px-1 py-1 bg-gray-200 text-gray-600 font-bold text-[10px] sm:text-xs rounded-md text-center">OFF DUTY</div>;
                        } else if (timeUpper.includes('SICK') || shift.unit.toUpperCase().includes('SICK')) {
-                           bgClass = "bg-orange-50 border-orange-200";
+                           bgClass = "bg-orange-50 border-orange-200 cursor-pointer";
                            content = <div className="mt-1 px-1 py-1 bg-orange-100 text-orange-700 font-bold text-[10px] sm:text-xs rounded-md text-center">SICK LEAVE</div>;
                        } else if (timeUpper.includes('HOLIDAY')) {
-                           bgClass = "bg-purple-50 border-purple-200";
+                           bgClass = "bg-purple-50 border-purple-200 cursor-pointer";
                            content = <div className="mt-1 px-1 py-1 bg-purple-100 text-purple-700 font-bold text-[10px] sm:text-xs rounded-md text-center">HOLIDAY</div>;
                        } else {
-                           bgClass = "bg-sky-50 border-sky-200";
+                           bgClass = "bg-sky-50 border-sky-200 cursor-pointer";
                            content = (
-                             <div className="mt-1 flex flex-col gap-1">
+                             <div className="mt-1 flex flex-col gap-1 pointer-events-none">
                                <span className="px-1 sm:px-2 py-1 bg-sky-100 text-sky-800 font-bold text-[9px] sm:text-xs rounded-md text-center whitespace-nowrap truncate" title={shift.time}>{shift.time}</span>
                                <span className="px-1 sm:px-2 py-1 bg-white text-slate-500 font-mono font-bold text-[9px] sm:text-[10px] rounded-md text-center border border-sky-100 truncate" title={shift.unit}>{shift.unit}</span>
                              </div>
@@ -1605,12 +1930,17 @@ const EmployeePortal = () => {
                        }
                     }
 
+                    const today = new Date();
                     const isToday = dayObj.dateString === `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
                     return (
-                      <div key={i} className={`min-h-[80px] sm:min-h-[100px] p-1 sm:p-2 border rounded-lg transition-colors flex flex-col overflow-hidden ${bgClass} ${isToday ? 'ring-2 ring-sky-500 ring-offset-2' : ''}`}>
-                         <div className="flex justify-between items-center mb-1">
-                            <span className={`text-xs sm:text-sm font-bold ${isToday ? 'text-sky-600 bg-sky-100 w-6 h-6 flex items-center justify-center rounded-full' : 'text-slate-700'}`}>
+                      <div 
+                        key={i} 
+                        onClick={() => shift && setSelectedShiftModal(shift)} // NEW: Triggers modal
+                        className={`min-h-[80px] sm:min-h-[100px] p-1 sm:p-2 border rounded-lg transition-all flex flex-col overflow-hidden ${bgClass} ${isToday ? 'ring-2 ring-sky-500 ring-offset-1' : ''}`}
+                      >
+                         <div className="flex justify-between items-center mb-1 pointer-events-none">
+                            <span className={`text-xs sm:text-sm font-bold ${isToday ? 'text-white bg-sky-600 w-6 h-6 flex items-center justify-center rounded-full' : 'text-slate-700'}`}>
                               {dayObj.day}
                             </span>
                          </div>
@@ -1635,7 +1965,7 @@ const EmployeePortal = () => {
                   </div>
                   <div>
                     <p className="text-gray-500 text-sm font-medium">Sick Hours Available</p>
-                    <p className="text-2xl font-black text-slate-900">{userData?.sickEarned || '24.0'} hrs</p>
+                    <p className="text-2xl font-black text-slate-900">{userData?.sickEarned || '24.00'} hrs</p>
                   </div>
                 </div>
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center">
@@ -1644,7 +1974,7 @@ const EmployeePortal = () => {
                   </div>
                   <div>
                     <p className="text-gray-500 text-sm font-medium">Vacation (PTO) Available</p>
-                    <p className="text-2xl font-black text-slate-900">{userData?.ptoEarned || '0.0'} hrs</p>
+                    <p className="text-2xl font-black text-slate-900">{userData?.ptoEarned || '0.00'} hrs</p>
                   </div>
                 </div>
               </div>
