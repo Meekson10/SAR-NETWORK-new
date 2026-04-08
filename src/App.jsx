@@ -24,8 +24,10 @@ const db = getFirestore(app);
 const secondaryApp = initializeApp(firebaseConfig, "SecondaryApp");
 const secondaryAuth = getAuth(secondaryApp);
 
-// --- 🔴 WEB3FORMS KEY 🔴 ---
+// --- 🔴 YOUR API KEYS & LINKS 🔴 ---
 const WEB3FORMS_KEY = "2f182922-a7f9-483f-afd0-73d11139bbe3"; 
+// To make this live, create a $50 "Payment Link" in your Chase Business Dashboard and paste it here:
+const CHASE_PAYMENT_LINK = "https://checkout.chase.com/placeholder"; 
 
 // --- BUILT-IN ICONS ---
 const IconWrapper = ({ children, className }) => (
@@ -62,7 +64,9 @@ const Icons = {
   Save: (p) => <IconWrapper {...p}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></IconWrapper>,
   Mail: (p) => <IconWrapper {...p}><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></IconWrapper>,
   Eye: (p) => <IconWrapper {...p}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></IconWrapper>,
-  Bell: (p) => <IconWrapper {...p}><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></IconWrapper>
+  Bell: (p) => <IconWrapper {...p}><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></IconWrapper>,
+  Wrench: (p) => <IconWrapper {...p}><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></IconWrapper>,
+  Download: (p) => <IconWrapper {...p}><path d="M21 15v4a2 2 0 0 1-2-2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></IconWrapper>
 };
 
 // --- Custom Logo Component ---
@@ -215,32 +219,74 @@ const ServiceRequestPage = () => {
   const [isLocating, setIsLocating] = useState(false);
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({ type: '', location: '', phone: '', vehicle: '' });
+  
+  const [services, setServices] = useState([]);
+  const [isLoadingServices, setIsLoadingServices] = useState(true);
 
-  const services = [
-    { id: 'tow', label: 'Towing', icon: Icons.Truck },
-    { id: 'flat', label: 'Flat Tire', icon: Icons.AlertTriangle },
-    { id: 'lockout', label: 'Lockout', icon: Icons.Key },
-    { id: 'battery', label: 'Dead Battery', icon: Icons.Battery },
-    { id: 'fuel', label: 'Out of Gas', icon: Icons.Fuel },
-  ];
+  useEffect(() => {
+    const fetchServices = async () => {
+      try {
+        const snap = await getDocs(collection(db, "services"));
+        if (snap.empty) {
+          const defaults = [
+            { label: 'Towing', icon: 'Truck', price: 150 },
+            { label: 'Flat Tire', icon: 'AlertTriangle', price: 100 },
+            { label: 'Lockout', icon: 'Key', price: 85 },
+            { label: 'Dead Battery', icon: 'Battery', price: 75 },
+            { label: 'Out of Gas', icon: 'Fuel', price: 90 }
+          ];
+          const fetched = [];
+          for (const s of defaults) {
+            const docRef = await addDoc(collection(db, "services"), s);
+            fetched.push({ id: docRef.id, ...s });
+          }
+          setServices(fetched);
+        } else {
+          const fetched = [];
+          snap.forEach(doc => fetched.push({ id: doc.id, ...doc.data() }));
+          fetched.sort((a,b) => b.price - a.price);
+          setServices(fetched);
+        }
+      } catch(e) {
+          console.log(e);
+      } finally {
+        setIsLoadingServices(false);
+      }
+    };
+    fetchServices();
+  }, []);
 
-  const handleSubmit = async (e) => { 
+  const getServicePrice = (serviceLabel) => {
+    const service = services.find(s => s.label === serviceLabel);
+    return service ? service.price : 100;
+  };
+
+  const handlePaymentSubmit = async (e) => { 
     e.preventDefault(); 
     setIsSubmitting(true);
 
+    const totalCost = getServicePrice(formData.type);
+    const balanceDue = totalCost - 50; 
+
     const data = new FormData();
     data.append("access_key", WEB3FORMS_KEY);
-    data.append("subject", "🚨 NEW TOWING REQUEST");
+    data.append("subject", "🚨 NEW TOWING REQUEST (PENDING STRIPE PAYMENT)");
     data.append("Service Type", formData.type);
     data.append("Location", formData.location);
     data.append("Vehicle Details", formData.vehicle);
     data.append("Phone Number", formData.phone);
+    data.append("Total Cost", `$${totalCost.toFixed(2)}`);
+    data.append("Balance Due On-Scene", `$${balanceDue.toFixed(2)}`);
 
     try {
-      const response = await fetch("https://api.web3forms.com/submit", { method: "POST", body: data });
-      const result = await response.json();
-      if (result.success) setSubmitted(true);
-      else alert("Error: " + result.message);
+      // 1. Send the dispatch info to the Admin
+      await fetch("https://api.web3forms.com/submit", { method: "POST", body: data });
+      
+      // 2. Redirect the user securely to Chase to pay the $50 Deposit
+      window.open(CHASE_PAYMENT_LINK, '_blank');
+      
+      // 3. Show Success Screen
+      setSubmitted(true);
     } catch (error) {
       alert("Something went wrong. Please call us directly!");
     }
@@ -264,21 +310,17 @@ const ServiceRequestPage = () => {
         alert(`Location access failed: ${error.message}. Please type your location manually or ensure your browser has location permissions enabled.`);
         setIsLocating(false);
       },
-      { 
-        enableHighAccuracy: true, 
-        timeout: 10000, 
-        maximumAge: 0 
-      } 
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 } 
     );
   };
 
   if (submitted) {
     return (
-      <div className="max-w-md mx-auto mt-20 p-8 bg-green-50 rounded-2xl text-center border border-green-200">
+      <div className="max-w-md mx-auto mt-20 p-8 bg-green-50 rounded-2xl text-center border border-green-200 shadow-lg">
         <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4"><Icons.CheckCircle className="h-8 w-8" /></div>
-        <h2 className="text-2xl font-bold text-green-800 mb-2">Help is on the way!</h2>
-        <p className="text-green-700 mb-6">Your request has been received. A dispatcher will review your info and call you at {formData.phone}.</p>
-        <button onClick={() => { setSubmitted(false); setStep(1); }} className="mt-6 text-green-700 font-semibold hover:underline">Start New Request</button>
+        <h2 className="text-2xl font-bold text-green-800 mb-2">Request Processed!</h2>
+        <p className="text-green-700 mb-6">If the secure payment window did not open, please ensure pop-ups are allowed. A dispatcher is reviewing your request and will call you at {formData.phone} shortly.</p>
+        <button onClick={() => { setSubmitted(false); setStep(1); setFormData({ type: '', location: '', phone: '', vehicle: '' }); }} className="mt-6 text-green-700 font-bold hover:underline">Start New Request</button>
       </div>
     );
   }
@@ -289,22 +331,47 @@ const ServiceRequestPage = () => {
         <h2 className="text-3xl font-bold text-slate-900">Request Assistance</h2>
         <p className="text-gray-600 mt-2">Tell us what happened so we can send the right truck.</p>
       </div>
+      
       <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100">
-        <div className="p-8">
+        <div className="bg-slate-50 px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+          <span className="font-semibold text-slate-700 text-sm">Step {step} of 4</span>
+          <div className="flex space-x-2">
+            <div className={`h-2 w-6 sm:w-8 rounded-full transition-colors ${step >= 1 ? 'bg-sky-500' : 'bg-gray-200'}`}></div>
+            <div className={`h-2 w-6 sm:w-8 rounded-full transition-colors ${step >= 2 ? 'bg-sky-500' : 'bg-gray-200'}`}></div>
+            <div className={`h-2 w-6 sm:w-8 rounded-full transition-colors ${step >= 3 ? 'bg-sky-500' : 'bg-gray-200'}`}></div>
+            <div className={`h-2 w-6 sm:w-8 rounded-full transition-colors ${step >= 4 ? 'bg-green-500' : 'bg-gray-200'}`}></div>
+          </div>
+        </div>
+
+        <div className="p-6 sm:p-8">
           {step === 1 && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              {services.map((s) => (
-                <button key={s.id} onClick={() => { setFormData({...formData, type: s.label}); setStep(2); }} className="flex flex-col items-center justify-center p-6 border-2 border-gray-100 rounded-xl hover:border-sky-500 hover:bg-sky-50 transition-all group">
-                  <s.icon className="h-8 w-8 text-slate-400 group-hover:text-sky-600 mb-3" />
-                  <span className="font-semibold text-slate-700 group-hover:text-sky-700">{s.label}</span>
-                </button>
-              ))}
+            <div>
+              <h3 className="text-lg font-bold text-slate-900 mb-4">What do you need help with?</h3>
+              {isLoadingServices ? (
+                <div className="py-12 text-center text-gray-500 font-bold animate-pulse">Loading live pricing...</div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                  {services.map((s) => {
+                    const SrvIcon = Icons[s.icon] || Icons.Wrench;
+                    return (
+                      <button key={s.id} onClick={() => { setFormData({...formData, type: s.label}); setStep(2); }} className="flex flex-col items-center justify-center p-6 border-2 border-gray-100 rounded-xl hover:border-sky-500 hover:bg-sky-50 transition-all group relative overflow-hidden">
+                        <SrvIcon className="h-8 w-8 text-slate-400 group-hover:text-sky-600 mb-3" />
+                        <span className="font-semibold text-slate-700 group-hover:text-sky-700">{s.label}</span>
+                        <div className="absolute top-0 right-0 bg-slate-100 text-slate-500 text-[10px] font-bold px-2 py-1 rounded-bl-lg group-hover:bg-sky-100 group-hover:text-sky-600 transition-colors">
+                          ${s.price.toFixed(0)}
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           )}
+
           {step === 2 && (
             <div className="space-y-6">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Your Location</label>
+                <label className="block text-sm font-bold text-slate-700 mb-1">Your Location</label>
                 <div className="relative">
                   <Icons.MapPin className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
                   <input 
@@ -319,34 +386,92 @@ const ServiceRequestPage = () => {
                   type="button"
                   onClick={handleGetLocation}
                   disabled={isLocating}
-                  className="mt-2 text-sky-600 text-sm font-bold flex items-center hover:text-sky-700 disabled:opacity-50 transition-opacity"
+                  className="mt-3 text-sky-600 text-sm font-bold flex items-center hover:text-sky-700 disabled:opacity-50 transition-opacity bg-sky-50 px-3 py-2 rounded-lg w-full justify-center border border-sky-100"
                 >
-                  <Icons.MapPin className="h-4 w-4 mr-1" /> 
+                  <Icons.MapPin className="h-4 w-4 mr-2" /> 
                   {isLocating ? "Finding your exact location..." : "Share my exact GPS location"}
                 </button>
               </div>
-              <button 
-                onClick={() => setStep(3)}
-                disabled={!formData.location}
-                className="w-full bg-sky-600 text-white py-3 rounded-lg font-bold hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Next Step
-              </button>
+              <div className="flex gap-3 pt-4 border-t border-gray-100">
+                <button onClick={() => setStep(1)} className="w-1/3 bg-gray-100 text-slate-600 py-3 rounded-lg font-bold hover:bg-gray-200">Back</button>
+                <button 
+                  onClick={() => setStep(3)}
+                  disabled={!formData.location}
+                  className="w-2/3 bg-sky-600 text-white py-3 rounded-lg font-bold hover:bg-sky-700 disabled:opacity-50"
+                >
+                  Next Step
+                </button>
+              </div>
             </div>
           )}
+
           {step === 3 && (
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={(e) => { e.preventDefault(); setStep(4); }} className="space-y-6">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Vehicle Details</label>
+                <label className="block text-sm font-bold text-slate-700 mb-1">Vehicle Details</label>
                 <input required type="text" placeholder="2018 Toyota Camry (Silver)" className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" value={formData.vehicle} onChange={(e) => setFormData({...formData, vehicle: e.target.value})} />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Phone Number</label>
+                <label className="block text-sm font-bold text-slate-700 mb-1">Phone Number</label>
                 <input required type="tel" placeholder="(555) 123-4567" className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} />
               </div>
-              <button type="submit" disabled={isSubmitting} className="w-full bg-red-600 text-white py-4 rounded-lg font-bold text-lg hover:bg-red-700 disabled:opacity-50">
-                {isSubmitting ? "Sending Request..." : "Confirm Request"}
-              </button>
+              
+              <div className="flex gap-3 pt-4 border-t border-gray-100">
+                <button type="button" onClick={() => setStep(2)} className="w-1/3 bg-gray-100 text-slate-600 py-3 rounded-lg font-bold hover:bg-gray-200">Back</button>
+                <button type="submit" className="w-2/3 bg-slate-900 text-white py-3 rounded-lg font-bold hover:bg-slate-800 flex justify-center items-center">
+                  Continue to Payment <Icons.ChevronRight className="ml-1 h-5 w-5" />
+                </button>
+              </div>
+            </form>
+          )}
+
+          {step === 4 && (
+            <form onSubmit={handlePaymentSubmit} className="space-y-6">
+              <div className="bg-slate-50 border border-slate-200 p-4 sm:p-6 rounded-xl mb-6">
+                <h4 className="font-bold text-slate-800 mb-4 border-b border-slate-200 pb-2">Request Summary</h4>
+                
+                <div className="space-y-3 text-sm text-slate-600 mb-6">
+                  <p className="flex justify-between items-center"><span className="font-medium text-slate-500">Service ({formData.type}):</span> <span className="font-bold text-slate-800">${getServicePrice(formData.type).toFixed(2)}</span></p>
+                  <p className="flex justify-between items-center"><span className="font-medium text-slate-500">Location:</span> <span className="font-semibold text-slate-800 text-right max-w-[60%] truncate" title={formData.location}>{formData.location}</span></p>
+                  <p className="flex justify-between items-center"><span className="font-medium text-slate-500">Vehicle:</span> <span className="font-semibold text-slate-800 text-right max-w-[60%] truncate" title={formData.vehicle}>{formData.vehicle}</span></p>
+                </div>
+
+                <div className="border-t border-slate-200 pt-4">
+                  <div className="flex justify-between items-center text-lg mb-3">
+                    <span className="font-bold text-slate-800">Total Service Cost</span>
+                    <span className="font-black text-slate-900">${getServicePrice(formData.type).toFixed(2)}</span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center text-md text-blue-800 bg-blue-100 p-3 rounded-lg mb-3 border border-blue-200">
+                    <span className="font-bold">Dispatch Deposit (Due Now)</span>
+                    <span className="font-black">$50.00</span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center text-sm text-slate-500 px-2">
+                    <span className="font-medium">Remaining Balance (Due On-Scene)</span>
+                    <span className="font-bold">${(getServicePrice(formData.type) - 50).toFixed(2)}</span>
+                  </div>
+                </div>
+
+                <div className="bg-blue-50 text-blue-800 p-4 rounded-lg mt-6 text-xs font-medium border border-blue-100 flex items-start">
+                  <Icons.Shield className="h-5 w-5 mr-3 shrink-0 text-blue-600 mt-0.5" />
+                  <p className="leading-relaxed">
+                    <strong className="block mb-1 text-sm">Secure Chase Checkout.</strong> 
+                    Clicking the button below will redirect you to our official Chase Bank payment portal to securely submit your $50.00 non-refundable dispatch deposit. The remaining balance will be collected on-scene.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                <button type="button" onClick={() => setStep(3)} className="w-full sm:w-1/3 bg-gray-100 text-slate-600 py-4 rounded-lg font-bold hover:bg-gray-200 transition-colors">Back</button>
+                <button type="submit" disabled={isSubmitting} className="w-full sm:w-2/3 bg-blue-700 text-white py-4 rounded-lg font-bold text-lg hover:bg-blue-800 disabled:opacity-50 shadow-lg shadow-blue-200 transition-all flex justify-center items-center">
+                  {isSubmitting ? (
+                    <span className="flex items-center animate-pulse">Redirecting to Chase...</span>
+                  ) : (
+                    <><Icons.CreditCard className="h-5 w-5 mr-2" /> Proceed to Chase Checkout</>
+                  )}
+                </button>
+              </div>
             </form>
           )}
         </div>
@@ -357,7 +482,7 @@ const ServiceRequestPage = () => {
 
 const CareersPage = () => {
   const [selectedJob, setSelectedJob] = useState(null);
-  const [applicationStatus, setApplicationStatus] = useState('idle'); // idle, submitting, success
+  const [applicationStatus, setApplicationStatus] = useState('idle');
   const [liveJobs, setLiveJobs] = useState([]);
   const [isLoadingJobs, setIsLoadingJobs] = useState(true);
 
@@ -512,7 +637,6 @@ const CareersPage = () => {
                 </div>
                 <h3 className="text-xl font-bold text-slate-900 mb-2">{job.title}</h3>
                 
-                {/* NEW: Job Description rendering */}
                 {job.desc && <p className="text-sm text-gray-600 mb-4 line-clamp-3 flex-1">{job.desc}</p>}
                 
                 <div className="space-y-2 text-sm text-gray-600 mb-6 mt-auto pt-4 border-t border-gray-100">
@@ -531,7 +655,6 @@ const CareersPage = () => {
           ))
         )}
         
-        {/* FIXED: General Application Card Restored */}
         <div className="bg-slate-900 rounded-xl shadow-lg p-6 flex flex-col justify-center items-center text-center text-white transition-all hover:-translate-y-1">
           <h3 className="text-xl font-bold mb-2">Don't see your role?</h3>
           <p className="text-gray-300 mb-6 text-sm">Send us your resume and we'll keep you on file for future openings.</p>
@@ -612,8 +735,6 @@ const ContactPage = () => {
                   <input required name="Last Name" type="text" className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" />
                 </div>
               </div>
-              
-              {/* NEW: Optional Phone Number */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
@@ -624,7 +745,6 @@ const ContactPage = () => {
                   <input name="Phone" type="tel" className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" />
                 </div>
               </div>
-
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Message</label>
                 <textarea required name="Message" rows={4} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500"></textarea>
@@ -662,7 +782,7 @@ const EmployeePortal = () => {
   const [newEmpPassword, setNewEmpPassword] = useState('');
   const [isCreatingUser, setIsCreatingUser] = useState(false);
   const [createMessage, setCreateMessage] = useState(null);
-  const [expandedEmpId, setExpandedEmpId] = useState(null); // State for expanding HR Directory
+  const [expandedEmpId, setExpandedEmpId] = useState(null);
   
   // Admin Schedule Manager States
   const [selectedEmpId, setSelectedEmpId] = useState('');
@@ -680,24 +800,27 @@ const EmployeePortal = () => {
   const [newJobType, setNewJobType] = useState('Full-time');
   const [newJobLoc, setNewJobLoc] = useState('');
   const [newJobPay, setNewJobPay] = useState('');
-  const [newJobDesc, setNewJobDesc] = useState(''); // NEW: Job description state
+  const [newJobDesc, setNewJobDesc] = useState('');
+
+  // Admin Service Pricing Manager States
+  const [adminServices, setAdminServices] = useState([]);
+  const [newServiceLabel, setNewServiceLabel] = useState('');
+  const [newServiceIcon, setNewServiceIcon] = useState('Truck');
+  const [newServicePrice, setNewServicePrice] = useState('');
 
   // --- REGULAR EMPLOYEE SPECIFIC STATE ---
   const [empTab, setEmpTab] = useState('dashboard');
-  // Profile Form States
   const [profileAddress, setProfileAddress] = useState('');
   const [profilePhone, setProfilePhone] = useState('');
   const [profileRouting, setProfileRouting] = useState('');
   const [profileAccount, setProfileAccount] = useState('');
   const [profileStatus, setProfileStatus] = useState('');
   
-  // Employee Schedule State & Calendar Modals
   const [mySchedule, setMySchedule] = useState([]);
   const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth());
   const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
-  const [selectedShiftModal, setSelectedShiftModal] = useState(null); // NEW: For clicking a day
+  const [selectedShiftModal, setSelectedShiftModal] = useState(null);
   
-  // Time Off Form States
   const [timeOffStart, setTimeOffStart] = useState('');
   const [timeOffEnd, setTimeOffEnd] = useState('');
   const [timeOffReason, setTimeOffReason] = useState('Vacation');
@@ -705,15 +828,14 @@ const EmployeePortal = () => {
   const [timeOffStatus, setTimeOffStatus] = useState('');
   const [timeOffHistory, setTimeOffHistory] = useState([]);
   
-  // Employee Notifications
   const [notifications, setNotifications] = useState([]);
 
-  // Fetch extra data for Admin/Employees
   useEffect(() => {
     if (userData?.role === 'admin') {
       fetchEmployees();
       fetchAllTimeOffRequests();
       fetchAdminJobs();
+      fetchAdminServices(); 
     }
     if (userData?.role !== 'admin' && user && empTab === 'timeoff') {
       fetchTimeOffHistory();
@@ -726,7 +848,6 @@ const EmployeePortal = () => {
     }
   }, [adminActiveTab, userData, empTab]);
 
-  // Fetch specific employee schedule when Admin selects them
   useEffect(() => {
     if (adminActiveTab === 'scheduleManager' && selectedEmpId) {
       fetchEmpSchedule(selectedEmpId);
@@ -775,7 +896,6 @@ const EmployeePortal = () => {
           });
         });
       }
-      // Sort so newest requests appear at the top
       requests.sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
       setAllTimeOffRequests(requests);
     } catch (error) {
@@ -834,7 +954,74 @@ const EmployeePortal = () => {
     }
   };
 
-  // --- ADMIN FUNCTIONS ---
+  const fetchAdminServices = async () => {
+    try {
+      const snap = await getDocs(collection(db, "services"));
+      if (snap.empty) {
+        const defaults = [
+          { label: 'Towing', icon: 'Truck', price: 150 },
+          { label: 'Flat Tire', icon: 'AlertTriangle', price: 100 },
+          { label: 'Lockout', icon: 'Key', price: 85 },
+          { label: 'Dead Battery', icon: 'Battery', price: 75 },
+          { label: 'Out of Gas', icon: 'Fuel', price: 90 }
+        ];
+        for (const s of defaults) {
+          await addDoc(collection(db, "services"), s);
+        }
+        const newSnap = await getDocs(collection(db, "services"));
+        const newS = [];
+        newSnap.forEach(doc => newS.push({ id: doc.id, ...doc.data() }));
+        setAdminServices(newS.sort((a,b) => b.price - a.price));
+      } else {
+        const s = [];
+        snap.forEach(doc => s.push({ id: doc.id, ...doc.data() }));
+        setAdminServices(s.sort((a,b) => b.price - a.price));
+      }
+    } catch(e) { 
+      console.error("Error fetching services", e); 
+    }
+  };
+
+  const handleAddService = async (e) => {
+    e.preventDefault();
+    try {
+      await addDoc(collection(db, "services"), {
+        label: newServiceLabel,
+        icon: newServiceIcon,
+        price: Number(newServicePrice)
+      });
+      setNewServiceLabel('');
+      setNewServicePrice('');
+      setNewServiceIcon('Truck');
+      fetchAdminServices();
+      alert("Service added successfully.");
+    } catch(e) { 
+      alert("Error adding service"); 
+    }
+  };
+
+  const handleDeleteService = async (id) => {
+    if (!confirm("Delete this service? This will permanently remove it from the customer request page.")) return;
+    try {
+      await deleteDoc(doc(db, "services", id));
+      fetchAdminServices();
+    } catch(e) {
+      alert("Error deleting service");
+    }
+  };
+
+  const handleEditServicePrice = async (id, currentPrice) => {
+    const newPrice = prompt("Enter the new base price for this service (numbers only):", currentPrice);
+    if (newPrice && !isNaN(newPrice)) {
+      try {
+        await updateDoc(doc(db, "services", id), { price: Number(newPrice) });
+        fetchAdminServices();
+      } catch(e) { 
+        alert("Error updating price"); 
+      }
+    }
+  };
+
   const handleCreateEmployee = async (e) => {
     e.preventDefault();
     setIsCreatingUser(true);
@@ -911,7 +1098,7 @@ const EmployeePortal = () => {
         status: 'Scheduled'
       });
       setShiftDate(''); setShiftTime(''); setShiftUnit('');
-      fetchEmpSchedule(selectedEmpId); // Refresh table
+      fetchEmpSchedule(selectedEmpId);
     } catch (error) {
       alert("Failed to assign shift.");
     }
@@ -952,7 +1139,6 @@ const EmployeePortal = () => {
         }
       }
       
-      // NEW: Create an in-app notification for the employee
       await addDoc(collection(db, "users", userId, "notifications"), {
         message: `Your time-off request for ${reqObj.startDate} has been ${newStatus.toUpperCase()}.`,
         createdAt: new Date().toISOString(),
@@ -971,7 +1157,7 @@ const EmployeePortal = () => {
     try {
       await addDoc(collection(db, "jobs"), {
         title: newJobTitle,
-        desc: newJobDesc, // NEW: Added job description
+        desc: newJobDesc,
         type: newJobType,
         loc: newJobLoc,
         pay: newJobPay,
@@ -999,31 +1185,55 @@ const EmployeePortal = () => {
     }
   };
 
-  // --- EMPLOYEE FUNCTIONS ---
+  // Download QuickBooks CSV
+  const handleExportQuickBooks = () => {
+    if(employeeList.length === 0) {
+      alert("No employees to export.");
+      return;
+    }
+    
+    const headers = ["Employee Name", "Email", "Total Hours Worked", "PTO Earned", "Sick Available"];
+    const rows = employeeList.filter(emp => emp.role !== 'admin').map(emp => [
+      `"${emp.name || ''}"`,
+      `"${emp.email || ''}"`,
+      emp.hoursWorked || '0.00',
+      emp.ptoEarned || '0.00',
+      emp.sickEarned || '24.00'
+    ]);
+    
+    const csvContent = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `SAR_Network_Payroll_${new Date().toLocaleDateString().replace(/\//g, '-')}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleClockToggle = async () => {
     if (!user) return;
     const isCurrentlyClockedIn = userData?.workStatus === 'Clocked In';
     const newStatus = isCurrentlyClockedIn ? 'Clocked Out' : 'Clocked In';
-    const nowISO = new Date().toISOString(); // NEW: Store as ISO for precise math
+    const nowISO = new Date().toISOString();
     
     let updates = { 
       workStatus: newStatus,
       lastPunch: nowISO 
     };
 
-    // NEW: If clocking out, calculate precise hours worked and accrue PTO/Sick
     if (isCurrentlyClockedIn && userData.lastPunch) {
       const startTime = new Date(userData.lastPunch).getTime();
       const endTime = new Date(nowISO).getTime();
       
       if (!isNaN(startTime)) {
-        // Calculate exact hours elapsed
         const hoursElapsed = (endTime - startTime) / (1000 * 60 * 60);
         const currentHours = parseFloat(userData.hoursWorked || 0) + hoursElapsed;
         
-        // Placeholder Accrual System: Earns 0.02 hours of PTO & Sick per hour worked
         const currentPto = parseFloat(userData.ptoEarned || 0) + (hoursElapsed * 0.02);
-        const currentSick = parseFloat(userData.sickEarned || 24) + (hoursElapsed * 0.02); // Defaults to 24 start
+        const currentSick = parseFloat(userData.sickEarned || 24) + (hoursElapsed * 0.02);
 
         updates.hoursWorked = currentHours.toFixed(2);
         updates.ptoEarned = currentPto.toFixed(2);
@@ -1049,7 +1259,6 @@ const EmployeePortal = () => {
         banking: { routing: profileRouting, account: profileAccount }
       });
 
-      // SILENT ADMIN ALERT: Send email via Web3Forms
       const alertData = new FormData();
       alertData.append("access_key", WEB3FORMS_KEY);
       alertData.append("subject", `🚨 PROFILE UPDATE: ${userData?.name || user.email}`);
@@ -1081,7 +1290,6 @@ const EmployeePortal = () => {
         submittedAt: new Date().toISOString()
       });
 
-      // SILENT ADMIN ALERT: Send email via Web3Forms
       const alertData = new FormData();
       alertData.append("access_key", WEB3FORMS_KEY);
       alertData.append("subject", `🚨 TIME OFF REQUEST: ${userData?.name || user.email}`);
@@ -1108,7 +1316,6 @@ const EmployeePortal = () => {
     } catch (e) { console.log(e); }
   }
 
-  // Listen for Firebase Auth Changes
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
@@ -1118,7 +1325,6 @@ const EmployeePortal = () => {
         if (docSnap.exists()) {
           const data = docSnap.data();
 
-          // SECURITY CHECK: Kick out inactive users
           if (data.status === 'Inactive') {
             alert("This account has been deactivated by an Administrator.");
             await signOut(auth);
@@ -1126,7 +1332,6 @@ const EmployeePortal = () => {
           }
 
           setUserData(data);
-          // Pre-fill profile forms if data exists
           if (data.address) setProfileAddress(data.address);
           if (data.phone) setProfilePhone(data.phone);
           if (data.banking) {
@@ -1164,9 +1369,8 @@ const EmployeePortal = () => {
     return <div className="flex justify-center py-20"><p className="text-gray-500 font-bold animate-pulse">Connecting to Server...</p></div>;
   }
 
-  // --- CALENDAR LOGIC SETUP ---
   const daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
-  const firstDayOfMonth = new Date(calendarYear, calendarMonth, 1).getDay(); // 0 (Sun) to 6 (Sat)
+  const firstDayOfMonth = new Date(calendarYear, calendarMonth, 1).getDay();
 
   const calendarDays = [];
   for (let i = 0; i < firstDayOfMonth; i++) calendarDays.push(null);
@@ -1188,7 +1392,6 @@ const EmployeePortal = () => {
     else { setCalendarMonth(m => m + 1); }
   }
 
-  // --- SHOW LOGIN SCREEN IF NOT LOGGED IN ---
   if (!user) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] bg-slate-50 p-4">
@@ -1236,7 +1439,6 @@ const EmployeePortal = () => {
     );
   }
 
-  // --- ADMIN VIEW ---
   if (userData?.role === 'admin') {
     return (
       <div className="max-w-6xl mx-auto py-8 px-4">
@@ -1285,13 +1487,26 @@ const EmployeePortal = () => {
               <button className="bg-slate-900 text-white py-2 px-4 rounded font-bold text-sm w-full hover:bg-slate-800 transition-colors">Open HR Directory</button>
             </div>
 
-            {/* NEW JOB BOARD CARD */}
             <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer" onClick={() => setAdminActiveTab('jobManager')}>
               <h3 className="font-bold text-gray-800 mb-2">Job Postings</h3>
               <p className="text-3xl font-black text-blue-500">
                 {adminJobs.length}
               </p>
               <button className="mt-4 text-sm text-sky-600 font-bold">Manage Job Board &rarr;</button>
+            </div>
+
+            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer" onClick={() => setAdminActiveTab('serviceManager')}>
+              <h3 className="font-bold text-gray-800 mb-2">Service Pricing</h3>
+              <p className="text-3xl font-black text-purple-500">
+                {adminServices.length}
+              </p>
+              <button className="mt-4 text-sm text-sky-600 font-bold">Manage Services &rarr;</button>
+            </div>
+
+            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer" onClick={() => setAdminActiveTab('accounting')}>
+              <h3 className="font-bold text-gray-800 mb-2">Accounting & Payroll</h3>
+              <p className="text-gray-500 text-sm mb-4">Sync hours to QuickBooks or Gusto.</p>
+              <button className="bg-green-600 text-white py-2 px-4 rounded font-bold text-sm w-full hover:bg-green-700 transition-colors">Open Accounting Hub</button>
             </div>
           </div>
         ) : (
@@ -1300,7 +1515,7 @@ const EmployeePortal = () => {
               <Icons.ArrowLeft className="h-4 w-4 mr-2" /> Back to Dashboard
             </button>
             
-            {/* 1. NEW FLEET TRACKER VIEW */}
+            {/* 1. FLEET TRACKER VIEW */}
             {adminActiveTab === 'fleetView' && (
               <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
                 <div className="flex items-center justify-between border-b border-gray-100 pb-4 mb-6">
@@ -1431,12 +1646,11 @@ const EmployeePortal = () => {
                               </td>
                             </tr>
                             
-                            {/* EXPANDABLE HR DETAILS ROW WITH ADMIN HOURS OVEVIEW */}
+                            {/* EXPANDABLE HR DETAILS ROW */}
                             {expandedEmpId === emp.id && (
                               <tr className="bg-slate-50 border-b-2 border-slate-200 shadow-inner">
                                 <td colSpan="4" className="p-6">
                                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 text-sm">
-                                    {/* NEW: Admin views total hours, pto, sick */}
                                     <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
                                       <h5 className="font-bold text-slate-500 uppercase tracking-wider text-xs mb-3 flex items-center"><Icons.Clock className="h-4 w-4 mr-1"/> Hours & Balances</h5>
                                       <p className="mb-1"><strong className="text-slate-700">Total Hours:</strong> {emp.hoursWorked || '0.00'}</p>
@@ -1497,7 +1711,6 @@ const EmployeePortal = () => {
 
                 {selectedEmpId && (
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* Add Shift Form */}
                     <div className="lg:col-span-1 bg-white p-6 rounded-xl border border-gray-200 shadow-sm h-fit">
                       <h3 className="text-lg font-bold text-slate-900 mb-4">Assign New Shift</h3>
                       <form onSubmit={handleAddShift} className="space-y-4">
@@ -1519,7 +1732,6 @@ const EmployeePortal = () => {
                       </form>
                     </div>
 
-                    {/* Employee's Shift List */}
                     <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                       <div className="p-6 border-b border-gray-100 bg-slate-50">
                         <h3 className="text-lg font-bold text-slate-900">Driver's Calendar</h3>
@@ -1635,7 +1847,6 @@ const EmployeePortal = () => {
                   <p className="text-gray-500 text-sm mb-6">Jobs posted here will instantly appear on the public Careers page.</p>
                   
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* Add Job Form */}
                     <div className="lg:col-span-1 bg-slate-50 p-6 rounded-xl border border-slate-200 h-fit">
                       <h4 className="font-bold text-slate-800 mb-4">Post New Opening</h4>
                       <form onSubmit={handleAddJob} className="space-y-4">
@@ -1659,7 +1870,6 @@ const EmployeePortal = () => {
                           <label className="block text-sm font-bold text-slate-700 mb-1">Pay Rate</label>
                           <input required type="text" value={newJobPay} onChange={(e) => setNewJobPay(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" placeholder="e.g. $25-35/hr" />
                         </div>
-                        {/* NEW: Job Description Field */}
                         <div>
                           <label className="block text-sm font-bold text-slate-700 mb-1">Job Description</label>
                           <textarea required rows={3} value={newJobDesc} onChange={(e) => setNewJobDesc(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" placeholder="Briefly describe responsibilities..."></textarea>
@@ -1670,7 +1880,6 @@ const EmployeePortal = () => {
                       </form>
                     </div>
 
-                    {/* Active Jobs Table */}
                     <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 overflow-hidden">
                       <table className="w-full text-left">
                         <thead className="bg-slate-100 text-slate-600 text-sm">
@@ -1710,16 +1919,15 @@ const EmployeePortal = () => {
             {/* 6. ADMIN PROFILE VIEW */}
             {adminActiveTab === 'profile' && (
               <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-                <h3 className="text-2xl font-bold text-slate-900 mb-6 border-b pb-4 flex items-center">
-                  <Icons.User className="h-6 w-6 mr-2 text-sky-600"/> Admin Profile & Banking Info
+                <h3 className="text-lg font-bold text-slate-900 mb-6 border-b pb-4 flex items-center">
+                  <Icons.User className="h-5 w-5 mr-2 text-sky-600"/> Admin Profile & Banking Info
                 </h3>
                 
                 <form onSubmit={handleUpdateProfile} className="space-y-8 max-w-2xl">
                   {profileStatus === 'saved' && <div className="bg-green-50 text-green-700 p-3 rounded-lg font-bold border border-green-200">Profile updated securely!</div>}
                   
-                  {/* Contact Info */}
                   <div className="space-y-4">
-                    <h4 className="text-lg font-bold text-slate-700 flex items-center"><Icons.MapPin className="h-5 w-5 mr-2 text-sky-600"/> Contact Information</h4>
+                    <h4 className="text-md font-bold text-slate-700 flex items-center"><Icons.MapPin className="h-4 w-4 mr-2 text-sky-600"/> Contact Information</h4>
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">Mailing Address</label>
                       <input type="text" value={profileAddress} onChange={(e) => setProfileAddress(e.target.value)} placeholder="123 Main St, Apt 4B, City, State, ZIP" className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" />
@@ -1730,9 +1938,8 @@ const EmployeePortal = () => {
                     </div>
                   </div>
 
-                  {/* Banking Info */}
                   <div className="space-y-4 pt-6 border-t border-gray-100">
-                    <h4 className="text-lg font-bold text-slate-700 flex items-center"><Icons.CreditCard className="h-5 w-5 mr-2 text-sky-600"/> Direct Deposit Information</h4>
+                    <h4 className="text-md font-bold text-slate-700 flex items-center"><Icons.CreditCard className="h-4 w-4 mr-2 text-sky-600"/> Direct Deposit Information</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-slate-700 mb-1">Routing Number</label>
@@ -1750,6 +1957,117 @@ const EmployeePortal = () => {
                     <Icons.Save className="h-5 w-5 mr-2" /> {profileStatus === 'saving' ? 'Saving...' : 'Save Profile Changes'}
                   </button>
                 </form>
+              </div>
+            )}
+            
+            {/* 7. SERVICE PRICING MANAGER VIEW */}
+            {adminActiveTab === 'serviceManager' && (
+              <div className="space-y-6">
+                <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                  <h3 className="text-lg font-bold text-slate-900 mb-2 flex items-center"><Icons.Wrench className="h-5 w-5 mr-2 text-sky-600" /> Service & Pricing Manager</h3>
+                  <p className="text-gray-500 text-sm mb-6">Add, remove, or update the base prices for the services offered to customers.</p>
+                  
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div className="lg:col-span-1 bg-slate-50 p-6 rounded-xl border border-slate-200 h-fit">
+                      <h4 className="font-bold text-slate-800 mb-4">Add New Service</h4>
+                      <form onSubmit={handleAddService} className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-bold text-slate-700 mb-1">Service Name</label>
+                          <input required type="text" value={newServiceLabel} onChange={(e) => setNewServiceLabel(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg" placeholder="e.g. Winch Out" />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-bold text-slate-700 mb-1">Base Price ($)</label>
+                          <input required type="number" min="0" step="1" value={newServicePrice} onChange={(e) => setNewServicePrice(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg" placeholder="e.g. 125" />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-bold text-slate-700 mb-1">Icon</label>
+                          <select value={newServiceIcon} onChange={(e) => setNewServiceIcon(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg bg-white">
+                            <option value="Truck">Tow Truck</option>
+                            <option value="AlertTriangle">Warning Triangle</option>
+                            <option value="Key">Keys / Lockout</option>
+                            <option value="Battery">Battery</option>
+                            <option value="Fuel">Fuel Pump</option>
+                            <option value="Wrench">Wrench / Repair</option>
+                            <option value="Shield">Shield / Security</option>
+                          </select>
+                        </div>
+                        <button type="submit" className="w-full bg-sky-600 text-white py-3 rounded-lg font-bold hover:bg-sky-700">
+                          Add Service
+                        </button>
+                      </form>
+                    </div>
+
+                    <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 overflow-hidden">
+                      <table className="w-full text-left">
+                        <thead className="bg-slate-100 text-slate-600 text-sm">
+                          <tr>
+                            <th className="p-4 font-semibold">Service</th>
+                            <th className="p-4 font-semibold">Price</th>
+                            <th className="p-4 font-semibold text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {adminServices.map((srv) => {
+                            const SrvIcon = Icons[srv.icon] || Icons.Wrench;
+                            return (
+                              <tr key={srv.id} className="hover:bg-slate-50">
+                                <td className="p-4 flex items-center font-bold text-slate-900">
+                                  <SrvIcon className="h-5 w-5 mr-3 text-sky-600" />
+                                  {srv.label}
+                                </td>
+                                <td className="p-4 text-green-600 font-bold">${srv.price.toFixed(2)}</td>
+                                <td className="p-4 text-right space-x-2">
+                                  <button onClick={() => handleEditServicePrice(srv.id, srv.price)} className="text-xs font-bold text-sky-600 hover:text-sky-800 bg-sky-50 px-3 py-1.5 rounded">Edit Price</button>
+                                  <button onClick={() => handleDeleteService(srv.id)} className="text-xs font-bold text-red-600 hover:text-red-800 bg-red-50 px-3 py-1.5 rounded">Delete</button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                          {adminServices.length === 0 && (
+                            <tr>
+                              <td colSpan="3" className="p-8 text-center text-gray-500 font-medium">Loading services...</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 8. NEW QUICKBOOKS / PAYROLL ACCOUNTING VIEW */}
+            {adminActiveTab === 'accounting' && (
+              <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm max-w-4xl mx-auto">
+                <div className="text-center py-8">
+                  <div className="bg-green-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <Icons.Download className="h-10 w-10 text-green-600" />
+                  </div>
+                  <h3 className="text-2xl font-black text-slate-900 mb-2">Payroll & Accounting Sync</h3>
+                  <p className="text-gray-500 mb-8 max-w-xl mx-auto">
+                    Export your drivers' completed hours and accrued PTO instantly. This CSV file is pre-formatted and ready to be imported directly into QuickBooks Online or Gusto Payroll.
+                  </p>
+                  
+                  <button 
+                    onClick={handleExportQuickBooks}
+                    className="bg-green-600 hover:bg-green-700 text-white px-8 py-4 rounded-xl font-bold text-lg shadow-lg shadow-green-200 transition-all flex items-center mx-auto"
+                  >
+                    <Icons.Download className="h-6 w-6 mr-3" />
+                    Download QuickBooks CSV
+                  </button>
+
+                  <div className="mt-8 text-left bg-slate-50 p-6 rounded-lg border border-slate-200">
+                    <h4 className="font-bold text-slate-800 mb-2 text-sm flex items-center">
+                      <Icons.AlertTriangle className="h-4 w-4 mr-2 text-yellow-500"/> How to upload to QuickBooks
+                    </h4>
+                    <ol className="text-sm text-slate-600 list-decimal pl-5 space-y-1">
+                      <li>Click the green download button above.</li>
+                      <li>Log in to your QuickBooks Online account.</li>
+                      <li>Go to <strong>Payroll</strong> {'>'} <strong>Employees</strong>.</li>
+                      <li>Click the dropdown next to "Add an employee" and select <strong>Import from CSV</strong>.</li>
+                    </ol>
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -1817,7 +2135,7 @@ const EmployeePortal = () => {
           {/* TAB 1: TIME CLOCK & STATS */}
           {empTab === 'dashboard' && (
             <div>
-              {/* NEW: Employee In-App Notifications Alert */}
+              {/* Employee In-App Notifications Alert */}
               {notifications.filter(n => !n.read).length > 0 && (
                 <div className="bg-sky-50 border-l-4 border-sky-500 p-5 rounded-r-xl mb-8 shadow-sm">
                   <h4 className="font-bold text-sky-800 flex items-center mb-2"><Icons.AlertTriangle className="h-5 w-5 mr-2"/> New Notifications</h4>
@@ -1883,7 +2201,6 @@ const EmployeePortal = () => {
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 border-b pb-4 gap-4">
                 <h3 className="text-2xl font-bold text-slate-900">My Schedule</h3>
                 
-                {/* NEW: Calendar Month Navigation Controls */}
                 <div className="flex items-center bg-sky-50 rounded-lg p-1">
                   <button onClick={handlePrevMonth} className="p-2 text-sky-700 hover:bg-sky-200 rounded-md transition-colors"><Icons.ChevronLeft className="h-5 w-5" /></button>
                   <span className="px-4 font-bold text-sky-900 min-w-[140px] text-center">{monthNames[calendarMonth]} {calendarYear}</span>
@@ -1906,9 +2223,8 @@ const EmployeePortal = () => {
                     let content = null;
 
                     if (shift) {
-                       // NEW: Made clicking a shift open the details modal
                        const timeUpper = shift.time.toUpperCase();
-                       bgClass += " cursor-pointer shadow-sm hover:shadow-md"; // Added hover effects
+                       bgClass += " cursor-pointer shadow-sm hover:shadow-md"; 
                        
                        if (timeUpper.includes('OFF') || timeUpper.includes('PTO') || timeUpper.includes('VACATION')) {
                            bgClass = "bg-gray-100 border-gray-200 cursor-pointer";
@@ -1936,7 +2252,7 @@ const EmployeePortal = () => {
                     return (
                       <div 
                         key={i} 
-                        onClick={() => shift && setSelectedShiftModal(shift)} // NEW: Triggers modal
+                        onClick={() => shift && setSelectedShiftModal(shift)}
                         className={`min-h-[80px] sm:min-h-[100px] p-1 sm:p-2 border rounded-lg transition-all flex flex-col overflow-hidden ${bgClass} ${isToday ? 'ring-2 ring-sky-500 ring-offset-1' : ''}`}
                       >
                          <div className="flex justify-between items-center mb-1 pointer-events-none">
@@ -2026,7 +2342,13 @@ const EmployeePortal = () => {
                           <p className="font-bold text-sm text-slate-800">{req.startDate} to {req.endDate}</p>
                           <p className="text-xs font-semibold text-sky-600">{req.reason} ({req.payType})</p>
                         </div>
-                        <span className="bg-orange-100 text-orange-700 px-2 py-1 rounded text-xs font-bold uppercase">{req.status}</span>
+                        <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${
+                          req.status === 'Approved' ? 'bg-green-100 text-green-700' :
+                          req.status === 'Denied' ? 'bg-red-100 text-red-700' :
+                          'bg-orange-100 text-orange-700'
+                        }`}>
+                          {req.status}
+                        </span>
                       </div>
                     ))}
                     {timeOffHistory.length === 0 && <p className="text-sm text-gray-500">No time off requested yet.</p>}
@@ -2086,10 +2408,115 @@ const EmployeePortal = () => {
   );
 };
 
+// --- TERMS AND POLICIES PAGE ---
+const TermsPage = () => (
+  <div className="bg-white py-16 px-4 sm:px-6 lg:px-8 min-h-screen">
+    <div className="max-w-4xl mx-auto">
+      <h1 className="text-3xl md:text-5xl font-extrabold text-slate-900 mb-8">Terms of Service & Cancellation Policy</h1>
+      
+      <div className="prose prose-lg text-gray-600">
+        <h3 className="text-2xl font-bold text-slate-800 mt-8 mb-4 border-b border-gray-200 pb-2">1. Dispatch & Cancellation Fees</h3>
+        <p className="mb-4">
+          When you request a service through SAR Network, a dispatcher immediately routes the closest available unit to your location. Because our trucks burn fuel and turn down other jobs to reach you, the following cancellation policy is strictly enforced:
+        </p>
+        <ul className="list-disc pl-6 space-y-4 mb-8">
+          <li><strong>Grace Period:</strong> You may cancel your request without penalty within <strong>5 minutes</strong> of the initial dispatch confirmation.</li>
+          <li><strong>En Route Cancellation (Dry Run Fee):</strong> If you cancel your request after a driver has been dispatched and is en route to your location, a non-refundable <strong>$50.00 Dispatch Fee</strong> (also known as a Dry Run fee) will be charged to cover the operator's time and fuel.</li>
+          <li><strong>Gone On Arrival (GOA):</strong> If our driver arrives at the designated location and you or the vehicle are no longer there, or if you refuse service upon arrival, you will be charged the <strong>Full Base Hook-Up Fee</strong>.</li>
+        </ul>
+
+        <h3 className="text-2xl font-bold text-slate-800 mt-8 mb-4 border-b border-gray-200 pb-2">2. Refunds</h3>
+        <p className="mb-4">
+          All services rendered by SAR Network are final. Once a vehicle has been hooked up, jumped, unlocked, or supplied with fuel, no refunds will be issued.
+        </p>
+        <ul className="list-disc pl-6 space-y-4 mb-8">
+          <li>If you experience an issue with the service provided, you must contact our management team within 24 hours to file a formal grievance.</li>
+          <li>Refunds are not provided for delays caused by severe weather, severe traffic, or road closures beyond our control.</li>
+        </ul>
+
+        <h3 className="text-2xl font-bold text-slate-800 mt-8 mb-4 border-b border-gray-200 pb-2">3. Payment Terms</h3>
+        <p className="mb-8">
+          Payment is due in full at the time service is rendered unless prior billing arrangements have been made (e.g., commercial accounts or direct insurance billing). We accept all major credit cards, debit cards, and mobile wallets. Our operators do not carry change for large cash transactions.
+        </p>
+      </div>
+    </div>
+  </div>
+);
+
+// --- PRIVACY POLICY PAGE ---
+const PrivacyPage = () => (
+  <div className="bg-white py-16 px-4 sm:px-6 lg:px-8 min-h-screen">
+    <div className="max-w-4xl mx-auto">
+      <h1 className="text-3xl md:text-5xl font-extrabold text-slate-900 mb-8">Privacy Policy</h1>
+      
+      <div className="prose prose-lg text-gray-600">
+        <p className="mb-8">Last Updated: {new Date().toLocaleDateString()}</p>
+        
+        <h3 className="text-2xl font-bold text-slate-800 mt-8 mb-4 border-b border-gray-200 pb-2">1. Information We Collect</h3>
+        <p className="mb-4">To provide you with rapid and accurate roadside assistance, SAR Network collects the following information when you use our website or request service:</p>
+        <ul className="list-disc pl-6 space-y-2 mb-8">
+          <li><strong>Personal Details:</strong> First and last name, phone number, and email address.</li>
+          <li><strong>Service Details:</strong> Vehicle make, model, color, and license plate (if provided).</li>
+          <li><strong>Location Data:</strong> Exact GPS coordinates (only when you explicitly allow location access) or manually entered pickup/drop-off addresses.</li>
+        </ul>
+
+        <h3 className="text-2xl font-bold text-slate-800 mt-8 mb-4 border-b border-gray-200 pb-2">2. How We Use Your Information</h3>
+        <p className="mb-4">We use the information we collect solely for business operations, including:</p>
+        <ul className="list-disc pl-6 space-y-2 mb-8">
+          <li>Dispatching the nearest available tow truck or roadside technician to your location.</li>
+          <li>Calling or texting you with ETA updates or to locate your vehicle.</li>
+          <li>Processing payments and sending receipts.</li>
+          <li>Internal record-keeping and quality assurance.</li>
+        </ul>
+
+        <h3 className="text-2xl font-bold text-slate-800 mt-8 mb-4 border-b border-gray-200 pb-2">3. Information Sharing</h3>
+        <p className="mb-8">
+          <strong>We do not sell or rent your personal information to third parties.</strong> Your information is only shared with our dispatchers, your assigned driver, and secure third-party payment processors strictly for the purpose of completing your requested service.
+        </p>
+
+        <h3 className="text-2xl font-bold text-slate-800 mt-8 mb-4 border-b border-gray-200 pb-2">4. Data Security</h3>
+        <p className="mb-8">
+          We implement industry-standard security measures to protect your personal information. However, no method of transmission over the Internet is 100% secure. By using our service, you acknowledge and accept these inherent risks.
+        </p>
+      </div>
+    </div>
+  </div>
+);
 
 const Footer = ({ setActivePage }) => (
-  <footer className="bg-slate-900 text-white border-t border-slate-800 py-12 px-4 text-center">
-    <p>&copy; {new Date().getFullYear()} SAR Network. All rights reserved.</p>
+  <footer className="bg-slate-900 text-white border-t border-slate-800">
+    <div className="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8 grid grid-cols-1 md:grid-cols-4 gap-8">
+      <div className="col-span-1 md:col-span-2">
+        <div className="flex items-center mb-4">
+           <SarLogo className="h-10 w-10 mr-3" />
+           <span className="text-2xl font-black tracking-tighter">SAR<span className="text-sky-500">NETWORK</span></span>
+        </div>
+        <p className="text-gray-400 max-w-sm">
+          Leading the way in rapid roadside recovery. We are committed to safety, speed, and superior service.
+        </p>
+      </div>
+      
+      <div>
+        <h4 className="text-sm font-semibold text-gray-300 tracking-wider uppercase mb-4">Quick Links</h4>
+        <ul className="space-y-2">
+          <li><button onClick={() => setActivePage('services')} className="text-gray-400 hover:text-white">Request Service</button></li>
+          <li><button onClick={() => setActivePage('about')} className="text-gray-400 hover:text-white">About Us</button></li>
+          <li><button onClick={() => setActivePage('careers')} className="text-gray-400 hover:text-white">Careers</button></li>
+          <li><button onClick={() => setActivePage('employee')} className="text-gray-400 hover:text-white">Employee Login</button></li>
+        </ul>
+      </div>
+
+      <div>
+        <h4 className="text-sm font-semibold text-gray-300 tracking-wider uppercase mb-4">Legal</h4>
+        <ul className="space-y-2">
+          <li><button onClick={() => setActivePage('privacy')} className="text-gray-400 hover:text-white">Privacy Policy</button></li>
+          <li><button onClick={() => setActivePage('terms')} className="text-gray-400 hover:text-white">Terms of Service</button></li>
+        </ul>
+      </div>
+    </div>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 border-t border-slate-800 text-center text-gray-500 text-sm">
+      &copy; {new Date().getFullYear()} SAR Network. All rights reserved.
+    </div>
   </footer>
 );
 
@@ -2098,11 +2525,20 @@ const App = () => {
   const [activePage, setActivePage] = useState('home');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  useEffect(() => { window.scrollTo(0, 0); }, [activePage]);
+  // Scroll to top on page change
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [activePage]);
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900">
-      <Navigation activePage={activePage} setActivePage={setActivePage} isMobileMenuOpen={isMobileMenuOpen} setIsMobileMenuOpen={setIsMobileMenuOpen} />
+      <Navigation 
+        activePage={activePage} 
+        setActivePage={setActivePage}
+        isMobileMenuOpen={isMobileMenuOpen}
+        setIsMobileMenuOpen={setIsMobileMenuOpen}
+      />
+
       <main className="flex-grow">
         {activePage === 'home' && <HomePage setActivePage={setActivePage} />}
         {activePage === 'about' && <AboutPage />}
@@ -2110,7 +2546,10 @@ const App = () => {
         {activePage === 'careers' && <CareersPage />}
         {activePage === 'contact' && <ContactPage />}
         {activePage === 'employee' && <EmployeePortal />}
+        {activePage === 'terms' && <TermsPage />}
+        {activePage === 'privacy' && <PrivacyPage />}
       </main>
+
       <Footer setActivePage={setActivePage} />
     </div>
   );
