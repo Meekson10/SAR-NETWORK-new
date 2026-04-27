@@ -3,7 +3,31 @@ import { Link } from 'react-router-dom';
 import { Icons, SarLogo } from '../components/Icons';
 import { db, auth, secondaryAuth, secondaryApp } from '../services/firebase';
 import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, setDoc, getDoc } from 'firebase/firestore';
+import { query, limit, orderBy } from 'firebase/firestore';
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
+
+
+import toast from 'react-hot-toast';
+import { AdminDashboardView } from '../features/portal/AdminDashboardView';
+import { FleetTracker } from '../features/portal/FleetTracker';
+import { HRDirectory } from '../features/portal/HRDirectory';
+import { ScheduleManager } from '../features/portal/ScheduleManager';
+import { JobManager } from '../features/portal/JobManager';
+import { ServiceManager } from '../features/portal/ServiceManager';
+import { TimeOffManager } from '../features/portal/TimeOffManager';
+import { EmployeeProfile } from '../features/portal/EmployeeProfile';
+
+const customConfirm = (message) => new Promise((resolve) => {
+  toast((t) => (
+    <div className="flex flex-col gap-3">
+      <p className="font-bold text-slate-800">{message}</p>
+      <div className="flex gap-2 justify-end">
+        <button className="bg-red-500 text-white px-3 py-1 rounded text-sm font-bold hover:bg-red-600 transition-colors" onClick={() => { toast.dismiss(t.id); resolve(true); }}>Confirm</button>
+        <button className="bg-slate-200 text-slate-800 px-3 py-1 rounded text-sm font-bold hover:bg-slate-300 transition-colors" onClick={() => { toast.dismiss(t.id); resolve(false); }}>Cancel</button>
+      </div>
+    </div>
+  ), { duration: Infinity });
+});
 
 const WEB3FORMS_KEY = import.meta.env.VITE_WEB3FORMS_KEY;
 const CHASE_PAYMENT_LINK = "https://checkout.chase.com/placeholder";
@@ -103,7 +127,7 @@ const EmployeePortal = () => {
 
   const fetchEmployees = async () => {
     try {
-      const querySnapshot = await getDocs(collection(db, "users"));
+      const querySnapshot = await getDocs(query(collection(db, "users"), limit(20)));
       const users = [];
       querySnapshot.forEach((doc) => {
         users.push({ id: doc.id, ...doc.data() });
@@ -117,7 +141,7 @@ const EmployeePortal = () => {
   const fetchEmpSchedule = async (uid) => {
     if (!uid) return setEmpSchedule([]);
     try {
-      const snap = await getDocs(collection(db, "users", uid, "schedules"));
+      const snap = await getDocs(query(collection(db, "users", uid, "schedules"), limit(20)));
       const shifts = [];
       snap.forEach(doc => shifts.push({ id: doc.id, ...doc.data() }));
       shifts.sort((a, b) => new Date(a.date) - new Date(b.date));
@@ -129,7 +153,7 @@ const EmployeePortal = () => {
 
   const fetchAllTimeOffRequests = async () => {
     try {
-      const usersSnap = await getDocs(collection(db, "users"));
+      const usersSnap = await getDocs(query(collection(db, "users"), limit(20)));
       let requests = [];
       for (const userDoc of usersSnap.docs) {
         const uData = userDoc.data();
@@ -153,7 +177,7 @@ const EmployeePortal = () => {
   const fetchMySchedule = async () => {
     if (!user) return;
     try {
-      const snap = await getDocs(collection(db, "users", user.uid, "schedules"));
+      const snap = await getDocs(query(collection(db, "users", user.uid, "schedules"), limit(20)));
       const shifts = [];
       snap.forEach(doc => shifts.push({ id: doc.id, ...doc.data() }));
       shifts.sort((a, b) => new Date(a.date) - new Date(b.date));
@@ -165,7 +189,7 @@ const EmployeePortal = () => {
 
   const fetchTimeOffHistory = async () => {
     try {
-      const querySnapshot = await getDocs(collection(db, "users", user.uid, "time_off"));
+      const querySnapshot = await getDocs(query(collection(db, "users", user.uid, "time_off"), limit(20)));
       const requests = [];
       querySnapshot.forEach((doc) => {
         requests.push({ id: doc.id, ...doc.data() });
@@ -241,19 +265,19 @@ const EmployeePortal = () => {
       setNewServicePrice('');
       setNewServiceIcon('Truck');
       fetchAdminServices();
-      alert("Service added successfully.");
+      toast.success("Service added successfully.");
     } catch(e) { 
-      alert("Error adding service"); 
+      toast.error("Error adding service"); 
     }
   };
 
   const handleDeleteService = async (id) => {
-    if (!confirm("Delete this service? This will permanently remove it from the customer request page.")) return;
+    if (!(await customConfirm("Delete this service? This will permanently remove it from the customer request page."))) return;
     try {
       await deleteDoc(doc(db, "services", id));
       fetchAdminServices();
     } catch(e) {
-      alert("Error deleting service");
+      toast.error("Error deleting service");
     }
   };
 
@@ -264,7 +288,7 @@ const EmployeePortal = () => {
         await updateDoc(doc(db, "services", id), { price: Number(newPrice) });
         fetchAdminServices();
       } catch(e) { 
-        alert("Error updating price"); 
+        toast.error("Error updating price"); 
       }
     }
   };
@@ -305,32 +329,32 @@ const EmployeePortal = () => {
       await updateDoc(doc(db, "users", empId), { status: newStatus });
       fetchEmployees();
     } catch (error) {
-      alert("Failed to update employee status.");
+      toast.error("Failed to update employee status.");
     }
   };
 
   const handleDeleteEmployee = async (empId, empName) => {
     const confirmText = prompt(`SECURITY WARNING: You are about to permanently delete the account for ${empName || 'this employee'}.\n\nTo confirm, please type the word DELETE below:`);
     if (confirmText !== "DELETE") {
-      alert("Account deletion cancelled.");
+      toast.error("Account deletion cancelled.");
       return;
     }
     try {
       await deleteDoc(doc(db, "users", empId));
       fetchEmployees();
-      alert(`${empName || 'Employee'} has been successfully deleted.`);
+      toast.success(`${empName || 'Employee'} has been successfully deleted.`);
     } catch (error) {
-      alert("Failed to delete employee.");
+      toast.error("Failed to delete employee.");
     }
   };
 
   const handlePasswordReset = async (empEmail) => {
-    if(!confirm(`Are you sure you want to send a password reset email to ${empEmail}?`)) return;
+    if(!(await customConfirm(`Are you sure you want to send a password reset email to ${empEmail}?`))) return;
     try {
       await sendPasswordResetEmail(auth, empEmail);
-      alert("Password reset email sent successfully! The driver can use the link in their email to set a new password.");
+      toast.success("Password reset email sent successfully! The driver can use the link in their email to set a new password.");
     } catch (error) {
-      alert("Failed to send password reset email. Ensure the email address is correct.");
+      toast.error("Failed to send password reset email. Ensure the email address is correct.");
     }
   };
 
@@ -347,17 +371,17 @@ const EmployeePortal = () => {
       setShiftDate(''); setShiftTime(''); setShiftUnit('');
       fetchEmpSchedule(selectedEmpId);
     } catch (error) {
-      alert("Failed to assign shift.");
+      toast.error("Failed to assign shift.");
     }
   };
 
   const handleDeleteShift = async (shiftId) => {
-    if(!confirm("Remove this shift?")) return;
+    if(!(await customConfirm("Remove this shift?"))) return;
     try {
       await deleteDoc(doc(db, "users", selectedEmpId, "schedules", shiftId));
       fetchEmpSchedule(selectedEmpId);
     } catch (error) {
-      alert("Failed to remove shift.");
+      toast.error("Failed to remove shift.");
     }
   };
 
@@ -392,10 +416,10 @@ const EmployeePortal = () => {
         read: false
       });
       
-      alert(`Request has been successfully ${newStatus.toUpperCase()} and the employee has been notified.`);
+      toast.success(`Request has been successfully ${newStatus.toUpperCase()} and the employee has been notified.`);
       fetchAllTimeOffRequests();
     } catch (error) {
-      alert("Failed to update request status: " + error.message);
+      toast.error("Failed to update request status: " + error.message);
     }
   };
 
@@ -416,26 +440,26 @@ const EmployeePortal = () => {
       setNewJobLoc('');
       setNewJobPay('');
       fetchAdminJobs();
-      alert("Job posted successfully!");
+      toast.success("Job posted successfully!");
     } catch (error) {
-      alert("Failed to post job.");
+      toast.error("Failed to post job.");
     }
   };
 
   const handleDeleteJob = async (jobId) => {
-    if(!confirm("Are you sure you want to permanently delete this job posting?")) return;
+    if(!(await customConfirm("Are you sure you want to permanently delete this job posting?"))) return;
     try {
       await deleteDoc(doc(db, "jobs", jobId));
       fetchAdminJobs();
     } catch (error) {
-      alert("Failed to delete job.");
+      toast.error("Failed to delete job.");
     }
   };
 
   // Download QuickBooks CSV
   const handleExportQuickBooks = () => {
     if(employeeList.length === 0) {
-      alert("No employees to export.");
+      toast.error("No employees to export.");
       return;
     }
     
@@ -492,7 +516,7 @@ const EmployeePortal = () => {
       await updateDoc(doc(db, "users", user.uid), updates);
       setUserData({ ...userData, ...updates });
     } catch (error) {
-      alert("Failed to clock in/out. Check connection.");
+      toast.error("Failed to clock in/out. Check connection.");
     }
   };
 
@@ -573,7 +597,7 @@ const EmployeePortal = () => {
           const data = docSnap.data();
 
           if (data.status === 'Inactive') {
-            alert("This account has been deactivated by an Administrator.");
+            toast.error("This account has been deactivated by an Administrator.");
             await signOut(auth);
             return;
           }
@@ -705,57 +729,13 @@ const EmployeePortal = () => {
         </div>
 
         {adminActiveTab === 'dashboard' ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
-            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer" onClick={() => setAdminActiveTab('timeoffManager')}>
-              <h3 className="font-bold text-gray-800 mb-2">Pending Time Off</h3>
-              <p className="text-3xl font-black text-orange-500">
-                {allTimeOffRequests.filter(r => r.status === 'Pending Approval').length}
-              </p>
-              <button className="mt-4 text-sm text-sky-600 font-bold">Review Requests &rarr;</button>
-            </div>
-            
-            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer" onClick={() => setAdminActiveTab('fleetView')}>
-              <h3 className="font-bold text-gray-800 mb-2">Active Drivers</h3>
-              <p className="text-3xl font-black text-green-500">
-                {employeeList.filter(emp => emp.role !== 'admin' && emp.workStatus === 'Clocked In').length} / {employeeList.filter(emp => emp.role !== 'admin').length}
-              </p>
-              <button className="mt-4 text-sm text-sky-600 font-bold">View Fleet Tracker &rarr;</button>
-            </div>
-            
-            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer" onClick={() => setAdminActiveTab('scheduleManager')}>
-              <h3 className="font-bold text-gray-800 mb-2">Fleet Schedules</h3>
-              <p className="text-gray-500 text-sm mb-4">Assign shifts and trucks to drivers.</p>
-              <button className="bg-sky-600 text-white py-2 px-4 rounded font-bold text-sm w-full hover:bg-sky-700 transition-colors">Manage Schedules</button>
-            </div>
-            
-            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer" onClick={() => setAdminActiveTab('directory')}>
-              <h3 className="font-bold text-gray-800 mb-2">HR & Employee Info</h3>
-              <p className="text-gray-500 text-sm mb-4">View profiles, banking info, and create accounts.</p>
-              <button className="bg-slate-900 text-white py-2 px-4 rounded font-bold text-sm w-full hover:bg-slate-800 transition-colors">Open HR Directory</button>
-            </div>
-
-            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer" onClick={() => setAdminActiveTab('jobManager')}>
-              <h3 className="font-bold text-gray-800 mb-2">Job Postings</h3>
-              <p className="text-3xl font-black text-blue-500">
-                {adminJobs.length}
-              </p>
-              <button className="mt-4 text-sm text-sky-600 font-bold">Manage Job Board &rarr;</button>
-            </div>
-
-            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer" onClick={() => setAdminActiveTab('serviceManager')}>
-              <h3 className="font-bold text-gray-800 mb-2">Service Pricing</h3>
-              <p className="text-3xl font-black text-purple-500">
-                {adminServices.length}
-              </p>
-              <button className="mt-4 text-sm text-sky-600 font-bold">Manage Services &rarr;</button>
-            </div>
-
-            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer" onClick={() => setAdminActiveTab('accounting')}>
-              <h3 className="font-bold text-gray-800 mb-2">Accounting & Payroll</h3>
-              <p className="text-gray-500 text-sm mb-4">Sync hours to QuickBooks or Gusto.</p>
-              <button className="bg-green-600 text-white py-2 px-4 rounded font-bold text-sm w-full hover:bg-green-700 transition-colors">Open Accounting Hub</button>
-            </div>
-          </div>
+          <AdminDashboardView 
+            allTimeOffRequests={allTimeOffRequests}
+            employeeList={employeeList}
+            adminJobs={adminJobs}
+            adminServices={adminServices}
+            setAdminActiveTab={setAdminActiveTab}
+          />
         ) : (
           <div className="space-y-6">
             <button onClick={() => setAdminActiveTab('dashboard')} className="flex items-center text-slate-500 hover:text-sky-600 font-bold mb-4 transition-colors">
@@ -764,178 +744,29 @@ const EmployeePortal = () => {
             
             {/* 1. FLEET TRACKER VIEW */}
             {adminActiveTab === 'fleetView' && (
-              <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-                <div className="flex items-center justify-between border-b border-gray-100 pb-4 mb-6">
-                  <h3 className="text-xl font-bold text-slate-900 flex items-center"><Icons.Truck className="h-6 w-6 mr-2 text-sky-600" /> Live Fleet Tracker</h3>
-                  <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-bold animate-pulse">Monitoring Live System</span>
-                </div>
-
-                <h4 className="font-bold text-slate-500 uppercase tracking-wider mb-4">Clocked In (On Duty)</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-                  {employeeList.filter(emp => emp.role !== 'admin' && emp.workStatus === 'Clocked In').map(emp => (
-                    <div key={emp.id} className="bg-green-50 border-2 border-green-200 rounded-xl p-5 shadow-sm">
-                      <div className="flex justify-between items-start mb-2">
-                        <h4 className="font-bold text-lg text-slate-900">{emp.name}</h4>
-                        <span className="flex items-center text-green-600 font-bold text-xs uppercase"><span className="w-2 h-2 bg-green-500 rounded-full mr-1"></span> Active</span>
-                      </div>
-                      <p className="text-sm text-gray-600 flex items-center mb-1"><Icons.Phone className="h-4 w-4 mr-1 text-slate-400" /> {emp.phone || 'No phone listed'}</p>
-                      <p className="text-sm text-gray-600 flex items-center">
-                        <Icons.Clock className="h-4 w-4 mr-1 text-slate-400" /> Punched in: {emp.lastPunch ? new Date(emp.lastPunch).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Unknown'}
-                      </p>
-                    </div>
-                  ))}
-                  {employeeList.filter(emp => emp.role !== 'admin' && emp.workStatus === 'Clocked In').length === 0 && (
-                    <div className="col-span-full p-8 border-2 border-dashed border-gray-200 rounded-xl text-center text-gray-500 font-medium">
-                      No drivers are currently clocked in.
-                    </div>
-                  )}
-                </div>
-
-                <h4 className="font-bold text-slate-500 uppercase tracking-wider mb-4">Clocked Out (Off Duty)</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {employeeList.filter(emp => emp.role !== 'admin' && emp.workStatus !== 'Clocked In').map(emp => (
-                    <div key={emp.id} className="bg-slate-50 border border-slate-200 rounded-xl p-4">
-                      <h4 className="font-bold text-slate-700">{emp.name}</h4>
-                      <p className="text-xs text-gray-500 mt-1">Last punch: {emp.lastPunch ? new Date(emp.lastPunch).toLocaleDateString([], {month:'short', day:'numeric'}) : 'Never'}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <FleetTracker employeeList={employeeList} />
             )}
 
             {/* 2. ADVANCED HR DIRECTORY VIEW */}
             {adminActiveTab === 'directory' && (
-              <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-                <div className="xl:col-span-1 bg-white p-6 rounded-xl border border-gray-200 shadow-sm h-fit">
-                  <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center"><Icons.User className="h-5 w-5 mr-2 text-sky-600" /> Add New Employee</h3>
-                  
-                  {createMessage && (
-                    <div className={`p-3 rounded-lg mb-4 text-sm font-semibold border ${createMessage.type === 'success' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-600 border-red-200'}`}>
-                      {createMessage.text}
-                    </div>
-                  )}
-
-                  <form onSubmit={handleCreateEmployee} className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-1">Full Name</label>
-                      <input required type="text" value={newEmpName} onChange={(e) => setNewEmpName(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" placeholder="John Doe" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-1">Email Address</label>
-                      <input required type="email" value={newEmpEmail} onChange={(e) => setNewEmpEmail(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" placeholder="driver@sarnetwork.com" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-1">Temporary Password</label>
-                      <input required type="password" value={newEmpPassword} onChange={(e) => setNewEmpPassword(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" placeholder="Min 6 characters" />
-                    </div>
-                    <button disabled={isCreatingUser} type="submit" className="w-full bg-sky-600 text-white py-3 rounded-lg font-bold hover:bg-sky-700 transition-colors disabled:opacity-50">
-                      {isCreatingUser ? "Creating..." : "Create Account"}
-                    </button>
-                  </form>
-                </div>
-
-                <div className="xl:col-span-2 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                  <div className="p-6 border-b border-gray-100 bg-slate-50">
-                    <h3 className="text-lg font-bold text-slate-900">Secure Employee Directory</h3>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left">
-                      <thead className="bg-slate-100 text-slate-600 text-sm">
-                        <tr>
-                          <th className="p-4 font-semibold">Name / Email</th>
-                          <th className="p-4 font-semibold">Role</th>
-                          <th className="p-4 font-semibold">Account Status</th>
-                          <th className="p-4 font-semibold text-right">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {employeeList.map((emp) => (
-                          <React.Fragment key={emp.id}>
-                            <tr className={`transition-colors ${expandedEmpId === emp.id ? 'bg-sky-50' : 'hover:bg-slate-50'}`}>
-                              <td className="p-4">
-                                <div className="font-bold text-slate-900">{emp.name || 'Admin User'}</div>
-                                <div className="text-slate-500 text-sm">{emp.email}</div>
-                              </td>
-                              <td className="p-4">
-                                <span className={`px-2 py-1 rounded-full text-xs font-bold uppercase ${emp.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-sky-100 text-sky-700'}`}>
-                                  {emp.role || 'employee'}
-                               </span>
-                              </td>
-                              <td className="p-4">
-                                <span className={`px-2 py-1 rounded-full text-xs font-bold uppercase ${emp.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                  {emp.status || 'Active'}
-                                </span>
-                              </td>
-                              <td className="p-4 text-right space-x-2">
-                                <button 
-                                  onClick={() => setExpandedEmpId(expandedEmpId === emp.id ? null : emp.id)}
-                                  className="text-xs font-bold text-slate-600 hover:text-slate-900 bg-slate-200 px-3 py-1.5 rounded transition-colors"
-                                >
-                                  {expandedEmpId === emp.id ? 'Hide Details' : 'View Details'}
-                                </button>
-                                
-                                {emp.id !== user.uid && (
-                                  <>
-                                    <button 
-                                      onClick={() => handleToggleEmployeeStatus(emp.id, emp.status || 'Active')}
-                                      className="text-xs font-bold text-sky-600 hover:text-sky-800 bg-sky-50 px-2 py-1.5 rounded transition-colors"
-                                    >
-                                      {emp.status === 'Active' ? 'Disable' : 'Enable'}
-                                    </button>
-                                    <button 
-                                      onClick={() => handleDeleteEmployee(emp.id, emp.name)}
-                                      className="text-xs font-bold text-red-600 hover:text-red-800 bg-red-50 px-2 py-1.5 rounded transition-colors"
-                                    >
-                                      Delete
-                                    </button>
-                                  </>
-                                )}
-                              </td>
-                            </tr>
-                            
-                            {/* EXPANDABLE HR DETAILS ROW */}
-                            {expandedEmpId === emp.id && (
-                              <tr className="bg-slate-50 border-b-2 border-slate-200 shadow-inner">
-                                <td colSpan="4" className="p-6">
-                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 text-sm">
-                                    <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
-                                      <h5 className="font-bold text-slate-500 uppercase tracking-wider text-xs mb-3 flex items-center"><Icons.Clock className="h-4 w-4 mr-1"/> Hours & Balances</h5>
-                                      <p className="mb-1"><strong className="text-slate-700">Total Hours:</strong> {emp.hoursWorked || '0.00'}</p>
-                                      <p className="mb-1"><strong className="text-slate-700">PTO Earned:</strong> {emp.ptoEarned || '0.00'}</p>
-                                      <p><strong className="text-slate-700">Sick Avail:</strong> {emp.sickEarned || '24.00'}</p>
-                                    </div>
-                                    <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
-                                      <h5 className="font-bold text-slate-500 uppercase tracking-wider text-xs mb-3 flex items-center"><Icons.MapPin className="h-4 w-4 mr-1"/> Contact Info</h5>
-                                      <p className="mb-1"><strong className="text-slate-700">Phone:</strong> {emp.phone || 'Not provided'}</p>
-                                      <p><strong className="text-slate-700">Address:</strong> {emp.address || 'Not provided'}</p>
-                                    </div>
-                                    <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
-                                      <h5 className="font-bold text-slate-500 uppercase tracking-wider text-xs mb-3 flex items-center"><Icons.CreditCard className="h-4 w-4 mr-1"/> Direct Deposit</h5>
-                                      <p className="mb-1"><strong className="text-slate-700">Routing:</strong> {emp.banking?.routing ? `*****${emp.banking.routing.slice(-4)}` : 'Not provided'}</p>
-                                      <p><strong className="text-slate-700">Account:</strong> {emp.banking?.account ? `*****${emp.banking.account.slice(-4)}` : 'Not provided'}</p>
-                                    </div>
-                                    <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100 flex flex-col justify-center">
-                                      <h5 className="font-bold text-slate-500 uppercase tracking-wider text-xs mb-3 flex items-center"><Icons.Shield className="h-4 w-4 mr-1"/> Account Recovery</h5>
-                                      <button onClick={() => handlePasswordReset(emp.email)} className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded text-xs transition-colors">
-                                        Send Password Reset
-                                      </button>
-                                    </div>
-                                  </div>
-                                </td>
-                              </tr>
-                            )}
-                          </React.Fragment>
-                        ))}
-                        {employeeList.length === 0 && (
-                          <tr>
-                            <td colSpan="4" className="p-8 text-center text-gray-500 font-medium">Loading employee directory...</td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
+              <HRDirectory 
+                employeeList={employeeList}
+                createMessage={createMessage}
+                handleCreateEmployee={handleCreateEmployee}
+                newEmpName={newEmpName}
+                setNewEmpName={setNewEmpName}
+                newEmpEmail={newEmpEmail}
+                setNewEmpEmail={setNewEmpEmail}
+                newEmpPassword={newEmpPassword}
+                setNewEmpPassword={setNewEmpPassword}
+                isCreatingUser={isCreatingUser}
+                expandedEmpId={expandedEmpId}
+                setExpandedEmpId={setExpandedEmpId}
+                user={user}
+                handleToggleEmployeeStatus={handleToggleEmployeeStatus}
+                handleDeleteEmployee={handleDeleteEmployee}
+                handlePasswordReset={handlePasswordReset}
+              />
             )}
 
             {/* 3. SCHEDULE MANAGER VIEW */}
@@ -1209,78 +1040,18 @@ const EmployeePortal = () => {
             
             {/* 7. SERVICE PRICING MANAGER VIEW */}
             {adminActiveTab === 'serviceManager' && (
-              <div className="space-y-6">
-                <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-                  <h3 className="text-lg font-bold text-slate-900 mb-2 flex items-center"><Icons.Wrench className="h-5 w-5 mr-2 text-sky-600" /> Service & Pricing Manager</h3>
-                  <p className="text-gray-500 text-sm mb-6">Add, remove, or update the base prices for the services offered to customers.</p>
-                  
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    <div className="lg:col-span-1 bg-slate-50 p-6 rounded-xl border border-slate-200 h-fit">
-                      <h4 className="font-bold text-slate-800 mb-4">Add New Service</h4>
-                      <form onSubmit={handleAddService} className="space-y-4">
-                        <div>
-                          <label className="block text-sm font-bold text-slate-700 mb-1">Service Name</label>
-                          <input required type="text" value={newServiceLabel} onChange={(e) => setNewServiceLabel(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg" placeholder="e.g. Winch Out" />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-bold text-slate-700 mb-1">Base Price ($)</label>
-                          <input required type="number" min="0" step="1" value={newServicePrice} onChange={(e) => setNewServicePrice(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg" placeholder="e.g. 125" />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-bold text-slate-700 mb-1">Icon</label>
-                          <select value={newServiceIcon} onChange={(e) => setNewServiceIcon(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg bg-white">
-                            <option value="Truck">Tow Truck</option>
-                            <option value="AlertTriangle">Warning Triangle</option>
-                            <option value="Key">Keys / Lockout</option>
-                            <option value="Battery">Battery</option>
-                            <option value="Fuel">Fuel Pump</option>
-                            <option value="Wrench">Wrench / Repair</option>
-                            <option value="Shield">Shield / Security</option>
-                          </select>
-                        </div>
-                        <button type="submit" className="w-full bg-sky-600 text-white py-3 rounded-lg font-bold hover:bg-sky-700">
-                          Add Service
-                        </button>
-                      </form>
-                    </div>
-
-                    <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 overflow-hidden">
-                      <table className="w-full text-left">
-                        <thead className="bg-slate-100 text-slate-600 text-sm">
-                          <tr>
-                            <th className="p-4 font-semibold">Service</th>
-                            <th className="p-4 font-semibold">Price</th>
-                            <th className="p-4 font-semibold text-right">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                          {adminServices.map((srv) => {
-                            const SrvIcon = Icons[srv.icon] || Icons.Wrench;
-                            return (
-                              <tr key={srv.id} className="hover:bg-slate-50">
-                                <td className="p-4 flex items-center font-bold text-slate-900">
-                                  <SrvIcon className="h-5 w-5 mr-3 text-sky-600" />
-                                  {srv.label}
-                                </td>
-                                <td className="p-4 text-green-600 font-bold">${srv.price.toFixed(2)}</td>
-                                <td className="p-4 text-right space-x-2">
-                                  <button onClick={() => handleEditServicePrice(srv.id, srv.price)} className="text-xs font-bold text-sky-600 hover:text-sky-800 bg-sky-50 px-3 py-1.5 rounded">Edit Price</button>
-                                  <button onClick={() => handleDeleteService(srv.id)} className="text-xs font-bold text-red-600 hover:text-red-800 bg-red-50 px-3 py-1.5 rounded">Delete</button>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                          {adminServices.length === 0 && (
-                            <tr>
-                              <td colSpan="3" className="p-8 text-center text-gray-500 font-medium">Loading services...</td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <ServiceManager 
+                adminServices={adminServices}
+                newServiceLabel={newServiceLabel}
+                setNewServiceLabel={setNewServiceLabel}
+                newServicePrice={newServicePrice}
+                setNewServicePrice={setNewServicePrice}
+                newServiceIcon={newServiceIcon}
+                setNewServiceIcon={setNewServiceIcon}
+                handleAddService={handleAddService}
+                handleEditServicePrice={handleEditServicePrice}
+                handleDeleteService={handleDeleteService}
+              />
             )}
 
             {/* 8. NEW QUICKBOOKS / PAYROLL ACCOUNTING VIEW */}

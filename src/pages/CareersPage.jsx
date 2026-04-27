@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import { Icons, SarLogo } from '../components/Icons';
 import { db, auth, secondaryAuth, secondaryApp } from '../services/firebase';
 import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, setDoc, getDoc } from 'firebase/firestore';
@@ -80,6 +81,10 @@ const CareersPage = () => {
   if (applicationStatus === 'success') {
     return (
       <div className="max-w-md mx-auto py-16 px-4">
+        <Helmet>
+          <title>Application Received | SAR Network Careers</title>
+          <meta name="description" content="Your job application has been successfully submitted to the SAR Network team." />
+        </Helmet>
         <div className="bg-green-50 p-8 rounded-2xl text-center border border-green-200 shadow-sm">
           <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
             <Icons.CheckCircle className="h-8 w-8" />
@@ -100,6 +105,10 @@ const CareersPage = () => {
   if (selectedJob) {
     return (
       <div className="max-w-3xl mx-auto py-12 px-4 sm:px-6">
+        <Helmet>
+          <title>Apply for {selectedJob.title} | SAR Network Careers</title>
+          <meta name="description" content={`Apply for the ${selectedJob.title} position at SAR Network.`} />
+        </Helmet>
         <button onClick={() => { setSelectedJob(null); reset(); }} className="flex items-center text-slate-500 hover:text-sky-600 font-medium mb-6 transition-colors">
           <Icons.ArrowLeft className="h-4 w-4 mr-2" /> Back to Careers
         </button>
@@ -112,39 +121,40 @@ const CareersPage = () => {
           <form onSubmit={handleSubmit(onSubmit)} className="p-8 space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-bold text-slate-700 mb-2">First Name</label>
-                <input {...register('firstName')} type="text" className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-sky-500 ${errors.firstName ? 'border-red-500' : 'border-gray-300'}`} />
+                <label htmlFor="firstName" className="block text-sm font-bold text-slate-700 mb-2">First Name</label>
+                <input id="firstName" {...register('firstName')} type="text" className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-sky-500 ${errors.firstName ? 'border-red-500' : 'border-gray-300'}`} />
                 {errors.firstName && <p className="text-red-500 text-xs mt-1">{errors.firstName.message}</p>}
               </div>
               <div>
-                <label className="block text-sm font-bold text-slate-700 mb-2">Last Name</label>
-                <input {...register('lastName')} type="text" className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-sky-500 ${errors.lastName ? 'border-red-500' : 'border-gray-300'}`} />
+                <label htmlFor="lastName" className="block text-sm font-bold text-slate-700 mb-2">Last Name</label>
+                <input id="lastName" {...register('lastName')} type="text" className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-sky-500 ${errors.lastName ? 'border-red-500' : 'border-gray-300'}`} />
                 {errors.lastName && <p className="text-red-500 text-xs mt-1">{errors.lastName.message}</p>}
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-bold text-slate-700 mb-2">Email Address</label>
-                <input {...register('email')} type="email" className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-sky-500 ${errors.email ? 'border-red-500' : 'border-gray-300'}`} />
+                <label htmlFor="email" className="block text-sm font-bold text-slate-700 mb-2">Email Address</label>
+                <input id="email" {...register('email')} type="email" className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-sky-500 ${errors.email ? 'border-red-500' : 'border-gray-300'}`} />
                 {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email.message}</p>}
               </div>
               <div>
-                <label className="block text-sm font-bold text-slate-700 mb-2">Phone Number</label>
-                <input {...register('phone')} type="tel" className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-sky-500 ${errors.phone ? 'border-red-500' : 'border-gray-300'}`} />
+                <label htmlFor="phone" className="block text-sm font-bold text-slate-700 mb-2">Phone Number</label>
+                <input id="phone" {...register('phone')} type="tel" className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-sky-500 ${errors.phone ? 'border-red-500' : 'border-gray-300'}`} />
                 {errors.phone && <p className="text-red-500 text-xs mt-1">{errors.phone.message}</p>}
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-bold text-slate-700 mb-2">Experience / Relevant Skills</label>
-              <textarea {...register('experience')} rows={4} className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-sky-500 ${errors.experience ? 'border-red-500' : 'border-gray-300'}`} placeholder="Tell us about your driving experience, licenses, or dispatching background..."></textarea>
+              <label htmlFor="experience" className="block text-sm font-bold text-slate-700 mb-2">Experience / Relevant Skills</label>
+              <textarea id="experience" {...register('experience')} rows={4} className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-sky-500 ${errors.experience ? 'border-red-500' : 'border-gray-300'}`} placeholder="Tell us about your driving experience, licenses, or dispatching background..."></textarea>
               {errors.experience && <p className="text-red-500 text-xs mt-1">{errors.experience.message}</p>}
             </div>
 
             <div>
-              <label className="block text-sm font-bold text-slate-700 mb-2">Resume / Portfolio Link</label>
+              <label htmlFor="resumeLink" className="block text-sm font-bold text-slate-700 mb-2">Resume / Portfolio Link</label>
               <input 
+                id="resumeLink"
                 {...register('resumeLink')}
                 type="url" 
                 placeholder="Paste a link to your Google Drive, Dropbox, or LinkedIn profile..."
@@ -168,6 +178,11 @@ const CareersPage = () => {
 
   return (
     <div className="max-w-7xl mx-auto py-16 px-4 sm:px-6 lg:px-8">
+      <Helmet>
+        <title>Careers | SAR Network - Join Our Towing & Dispatch Team</title>
+        <meta name="description" content="Explore career opportunities at SAR Network. We are hiring tow truck drivers, dispatchers, and support staff." />
+      </Helmet>
+
       <div className="text-center mb-16">
         <h2 className="text-3xl font-extrabold text-slate-900 sm:text-4xl">Join the SAR Network Team</h2>
         <p className="mt-4 text-xl text-gray-500 max-w-2xl mx-auto">

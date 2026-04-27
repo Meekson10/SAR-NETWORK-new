@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import { Icons, SarLogo } from '../components/Icons';
 import { db, auth, secondaryAuth, secondaryApp } from '../services/firebase';
 import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, setDoc, getDoc } from 'firebase/firestore';
@@ -10,6 +11,10 @@ const CHASE_PAYMENT_LINK = "https://checkout.chase.com/placeholder";
 
 const AboutPage = () => (
   <div className="bg-white">
+    <Helmet>
+      <title>About Us | SAR Network</title>
+      <meta name="description" content="Learn about SAR Network's history, mission, and how we became the nation's most reliable roadside recovery partner." />
+    </Helmet>
     <div className="bg-slate-900 py-16 px-4">
       <div className="max-w-7xl mx-auto text-center">
         <h1 className="text-3xl md:text-5xl font-extrabold text-white mb-6">Our Story & Mission</h1>

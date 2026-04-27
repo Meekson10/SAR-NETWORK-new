@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import { Icons, SarLogo } from '../components/Icons';
 import { db, auth, secondaryAuth, secondaryApp } from '../services/firebase';
 import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, setDoc, getDoc } from 'firebase/firestore';
@@ -13,6 +14,10 @@ const HomePage = () => {
   return (
 
   <div className="flex flex-col">
+    <Helmet>
+      <title>SAR Network - Emergency Towing & Roadside Assistance</title>
+      <meta name="description" content="SAR Network provides 24/7 rapid response towing and roadside assistance. Trusted by thousands of drivers nationwide." />
+    </Helmet>
     <div className="relative bg-slate-900 overflow-hidden">
       <div className="absolute inset-0">
         <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1562259949-e8e7689d7828?ixlib=rb-1.2.1&auto=format&fit=crop&w=1950&q=80')] bg-cover bg-center opacity-20"></div>

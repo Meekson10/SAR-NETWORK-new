@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import { Icons, SarLogo } from '../components/Icons';
 import { db, auth, secondaryAuth, secondaryApp } from '../services/firebase';
 import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, setDoc, getDoc } from 'firebase/firestore';
@@ -111,6 +112,10 @@ const ServiceRequestPage = () => {
   if (submitted) {
     return (
       <div className="max-w-md mx-auto mt-20 p-8 bg-green-50 rounded-2xl text-center border border-green-200 shadow-lg">
+        <Helmet>
+          <title>Request Submitted | SAR Network</title>
+          <meta name="description" content="Your roadside assistance request has been submitted successfully." />
+        </Helmet>
         <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4"><Icons.CheckCircle className="h-8 w-8" /></div>
         <h2 className="text-2xl font-bold text-green-800 mb-2">Request Processed!</h2>
         <p className="text-green-700 mb-6">If the secure payment window did not open, please ensure pop-ups are allowed. A dispatcher is reviewing your request and will call you at {formData.phone} shortly.</p>
@@ -121,6 +126,10 @@ const ServiceRequestPage = () => {
 
   return (
     <div className="max-w-2xl mx-auto py-12 px-4">
+      <Helmet>
+        <title>Request Roadside Assistance | SAR Network</title>
+        <meta name="description" content="Request immediate towing or roadside assistance from SAR Network. Fast, reliable, and secure online dispatch." />
+      </Helmet>
       <div className="mb-8 text-center">
         <h2 className="text-3xl font-bold text-slate-900">Request Assistance</h2>
         <p className="text-gray-600 mt-2">Tell us what happened so we can send the right truck.</p>

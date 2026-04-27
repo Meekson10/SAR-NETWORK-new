@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import { Icons, SarLogo } from '../components/Icons';
 import { db, auth, secondaryAuth, secondaryApp } from '../services/firebase';
 import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, setDoc, getDoc } from 'firebase/firestore';
@@ -10,6 +11,10 @@ const CHASE_PAYMENT_LINK = "https://checkout.chase.com/placeholder";
 
 const TermsPage = () => (
   <div className="bg-white py-16 px-4 sm:px-6 lg:px-8 min-h-screen">
+    <Helmet>
+      <title>Terms of Service | SAR Network</title>
+      <meta name="description" content="Read the SAR Network terms of service, dispatch fees, cancellation policies, and refund information." />
+    </Helmet>
     <div className="max-w-4xl mx-auto">
       <h1 className="text-3xl md:text-5xl font-extrabold text-slate-900 mb-8">Terms of Service & Cancellation Policy</h1>
       

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Helmet } from 'react-helmet-async';
 import { Icons } from '../components/Icons';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -52,6 +53,11 @@ const ContactPage = () => {
 
   return (
     <div className="max-w-7xl mx-auto py-16 px-4 sm:px-6 lg:px-8">
+      <Helmet>
+        <title>Contact Us | SAR Network - Emergency Towing & Roadside Assistance</title>
+        <meta name="description" content="Get in touch with SAR Network for any questions, feedback, or emergency roadside assistance." />
+      </Helmet>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-start">
         <div>
           <h2 className="text-3xl font-extrabold text-slate-900 mb-6">Contact Us</h2>
@@ -78,30 +84,30 @@ const ContactPage = () => {
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">First Name</label>
-                  <input {...register('firstName')} type="text" className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-sky-500 ${errors.firstName ? 'border-red-500' : 'border-gray-300'}`} />
+                  <label htmlFor="firstName" className="block text-sm font-medium text-slate-700 mb-1">First Name</label>
+                  <input id="firstName" {...register('firstName')} type="text" className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-sky-500 ${errors.firstName ? 'border-red-500' : 'border-gray-300'}`} />
                   {errors.firstName && <p className="text-red-500 text-xs mt-1">{errors.firstName.message}</p>}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Last Name</label>
-                  <input {...register('lastName')} type="text" className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-sky-500 ${errors.lastName ? 'border-red-500' : 'border-gray-300'}`} />
+                  <label htmlFor="lastName" className="block text-sm font-medium text-slate-700 mb-1">Last Name</label>
+                  <input id="lastName" {...register('lastName')} type="text" className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-sky-500 ${errors.lastName ? 'border-red-500' : 'border-gray-300'}`} />
                   {errors.lastName && <p className="text-red-500 text-xs mt-1">{errors.lastName.message}</p>}
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
-                  <input {...register('email')} type="email" className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-sky-500 ${errors.email ? 'border-red-500' : 'border-gray-300'}`} />
+                  <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+                  <input id="email" {...register('email')} type="email" className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-sky-500 ${errors.email ? 'border-red-500' : 'border-gray-300'}`} />
                   {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email.message}</p>}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Phone <span className="text-gray-400 font-normal">(Optional)</span></label>
-                  <input {...register('phone')} type="tel" className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" />
+                  <label htmlFor="phone" className="block text-sm font-medium text-slate-700 mb-1">Phone <span className="text-gray-400 font-normal">(Optional)</span></label>
+                  <input id="phone" {...register('phone')} type="tel" className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Message</label>
-                <textarea {...register('message')} rows={4} className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-sky-500 ${errors.message ? 'border-red-500' : 'border-gray-300'}`}></textarea>
+                <label htmlFor="message" className="block text-sm font-medium text-slate-700 mb-1">Message</label>
+                <textarea id="message" {...register('message')} rows={4} className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-sky-500 ${errors.message ? 'border-red-500' : 'border-gray-300'}`}></textarea>
                 {errors.message && <p className="text-red-500 text-xs mt-1">{errors.message.message}</p>}
               </div>
               <button disabled={status === "submitting"} type="submit" className="w-full bg-slate-900 text-white py-3 rounded-lg font-bold hover:bg-slate-800 disabled:opacity-50 transition-colors">
