@@ -8,7 +8,7 @@ import { collection, addDoc, getDocs } from 'firebase/firestore';
 const WEB3FORMS_KEY = import.meta.env.VITE_WEB3FORMS_KEY;
 
 // To make this live, create a $50 "Payment Link" in your Chase Business Dashboard and paste it here:
-const CHASE_PAYMENT_LINK = "https://checkout.chase.com/placeholder";
+const CHASE_PAYMENT_LINK = "https://payments.chase.com?invid=J60WVCYVM609";
 
 const ServiceRequestPage = () => {
   const [submitted, setSubmitted] = useState(false);
