@@ -1,17 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { Helmet, HelmetProvider } from 'react-helmet-async';
-
-// ----------------------------------------------------------------------
-// ⚠️ GITHUB REPOSITORY INSTRUCTIONS ⚠️
-// To use this file in your actual GitHub repository, UNCOMMENT these lines
-// and delete the "MOCKS FOR PREVIEW" section below:
-//
+// ----------------------------------------------------------------------------------
+// TO MAKE THIS WORK ON YOUR GITHUB:
+// 1. Delete the "PREVIEW ONLY FALLBACKS" section below.
+// 2. Uncomment the three lines directly below this:
 // import { Icons } from '../components/Icons';
 // import { db } from '../services/firebase';
 // import { collection, getDocs } from 'firebase/firestore';
-// ----------------------------------------------------------------------
+// ----------------------------------------------------------------------------------
 
-// --- START OF MOCKS FOR PREVIEW ---
+// --- PREVIEW ONLY FALLBACKS (DELETE THIS ENTIRE BLOCK IN GITHUB) ---
+const collection = () => ({});
+const getDocs = async () => ({ empty: true, forEach: () => {} });
+const db = {}; // Empty mock DB to prevent fake jobs from showing
 const IconWrapper = ({ children, className }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>;
 const Icons = {
   CheckCircle: (p) => <IconWrapper {...p}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></IconWrapper>,
@@ -21,19 +22,7 @@ const Icons = {
   ArrowLeft: (p) => <IconWrapper {...p}><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></IconWrapper>,
   ChevronRight: (p) => <IconWrapper {...p}><polyline points="9 18 15 12 9 6"></polyline></IconWrapper>
 };
-
-const db = {};
-const collection = () => ({});
-const getDocs = async () => ({
-  empty: false,
-  forEach: (cb) => {
-    [
-      { id: '1', title: "Tow Truck Operator", type: "Full-time", loc: "Newark Area", pay: "$25-35/hr", desc: "We are looking for an experienced operator with a clean driving record. Responsibilities include responding to calls, safely towing vehicles, and providing basic roadside help." },
-      { id: '2', title: "Dispatch Coordinator", type: "Full-time", loc: "Remote/Hybrid", pay: "$20-28/hr", desc: "Manage driver routing and customer requests. Must have excellent communication skills and be able to handle high-stress situations calmly." }
-    ].forEach((job) => cb({ id: job.id, data: () => job }));
-  }
-});
-// --- END OF MOCKS FOR PREVIEW ---
+// --- END PREVIEW ONLY FALLBACKS ---
 
 // Web3Forms key is hardcoded here to prevent any Vite build errors
 const WEB3FORMS_KEY = "2f182922-a7f9-483f-afd0-73d11139bbe3";
@@ -45,7 +34,7 @@ const CareersPage = () => {
   const [liveJobs, setLiveJobs] = useState([]);
   const [isLoadingJobs, setIsLoadingJobs] = useState(true);
 
-  // Fetch the live job listings from Firebase
+  // Fetch the live job listings from your REAL Firebase database
   useEffect(() => {
     const fetchJobs = async () => {
       try {
@@ -54,7 +43,7 @@ const CareersPage = () => {
         snap.forEach(doc => fetched.push({ id: doc.id, ...doc.data() }));
         setLiveJobs(fetched);
       } catch (err) {
-        console.error("Error fetching jobs:", err);
+        console.error("Error fetching jobs from Firebase:", err);
       } finally {
         setIsLoadingJobs(false);
       }
@@ -108,7 +97,7 @@ const CareersPage = () => {
     );
   }
 
-  // --- VIEW 2: JOB DESCRIPTION DETAILS ---
+  // --- VIEW 2: JOB DESCRIPTION DETAILS (Shows BEFORE the application form) ---
   if (selectedJob && !isApplying) {
     return (
       <HelmetProvider>
@@ -123,7 +112,7 @@ const CareersPage = () => {
           </button>
           
           <div className="bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-100">
-            {/* Header section with Job Title and basic tags */}
+            {/* Header section with Job Title and tags */}
             <div className="bg-slate-900 p-12 text-white relative">
                <h2 className="text-4xl sm:text-5xl font-black mb-6 leading-tight">{selectedJob.title}</h2>
                <div className="flex flex-wrap gap-8 text-slate-400 text-sm font-black uppercase tracking-widest">
@@ -133,16 +122,15 @@ const CareersPage = () => {
                </div>
             </div>
             
-            {/* Detailed Description section */}
+            {/* Detailed Description Section */}
             <div className="p-12">
               <h3 className="text-xl font-black text-slate-900 mb-6 border-b-4 border-sky-500 w-fit pb-2">Description & Requirements</h3>
               
-              {/* whitespace-pre-wrap ensures paragraph spacing from your Admin dashboard renders properly */}
               <p className="text-slate-600 text-lg leading-relaxed whitespace-pre-wrap mb-12 font-medium">
                 {selectedJob.desc || "We are looking for a dedicated professional to join our team. Apply below to learn more!"}
               </p>
               
-              {/* Application Call-to-action box */}
+              {/* Call-to-action to proceed to the application form */}
               <div className="bg-sky-50 rounded-3xl p-10 flex flex-col md:flex-row items-center justify-between border border-sky-100">
                 <div className="mb-6 md:mb-0">
                   <h4 className="font-black text-slate-900 text-xl mb-1">Ready to join the network?</h4>
