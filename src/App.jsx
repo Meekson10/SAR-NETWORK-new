@@ -886,6 +886,7 @@ const EmployeePortal = () => {
 
   // Admin Job Manager States
   const [adminJobs, setAdminJobs] = useState([]);
+  const [editingJobId, setEditingJobId] = useState(null);
   const [newJobTitle, setNewJobTitle] = useState('');
   const [newJobType, setNewJobType] = useState('Full-time');
   const [newJobLoc, setNewJobLoc] = useState('');
@@ -1245,24 +1246,54 @@ const EmployeePortal = () => {
   const handleAddJob = async (e) => {
     e.preventDefault();
     try {
-      await addDoc(collection(db, "jobs"), {
-        title: newJobTitle,
-        desc: newJobDesc,
-        type: newJobType,
-        loc: newJobLoc,
-        pay: newJobPay,
-        createdAt: new Date().toISOString()
-      });
+      if (editingJobId) {
+        await updateDoc(doc(db, "jobs", editingJobId), {
+          title: newJobTitle,
+          desc: newJobDesc,
+          type: newJobType,
+          loc: newJobLoc,
+          pay: newJobPay,
+        });
+        alert("Job updated successfully!");
+        setEditingJobId(null);
+      } else {
+        await addDoc(collection(db, "jobs"), {
+          title: newJobTitle,
+          desc: newJobDesc,
+          type: newJobType,
+          loc: newJobLoc,
+          pay: newJobPay,
+          createdAt: new Date().toISOString()
+        });
+        alert("Job posted successfully!");
+      }
       setNewJobTitle('');
       setNewJobDesc('');
       setNewJobType('Full-time');
       setNewJobLoc('');
       setNewJobPay('');
       fetchAdminJobs();
-      alert("Job posted successfully!");
     } catch (error) {
-      alert("Failed to post job.");
+      alert(editingJobId ? "Failed to update job." : "Failed to post job.");
     }
+  };
+
+  const handleEditJobClick = (job) => {
+    setEditingJobId(job.id);
+    setNewJobTitle(job.title || '');
+    setNewJobType(job.type || 'Full-time');
+    setNewJobLoc(job.loc || '');
+    setNewJobPay(job.pay || '');
+    setNewJobDesc(job.desc || '');
+  };
+
+  const handleCancelEdit = () => {
+    setEditingJobId(null);
+    setNewJobTitle('');
+    setNewJobDesc('');
+    setNewJobType('Full-time');
+    setNewJobLoc('');
+    setNewJobPay('');
   };
 
   const handleDeleteJob = async (jobId) => {
@@ -1938,7 +1969,7 @@ const EmployeePortal = () => {
                   
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     <div className="lg:col-span-1 bg-slate-50 p-6 rounded-xl border border-slate-200 h-fit">
-                      <h4 className="font-bold text-slate-800 mb-4">Post New Opening</h4>
+                      <h4 className="font-bold text-slate-800 mb-4">{editingJobId ? "Edit Job Opening" : "Post New Opening"}</h4>
                       <form onSubmit={handleAddJob} className="space-y-4">
                         <div>
                           <label className="block text-sm font-bold text-slate-700 mb-1">Job Title</label>
@@ -1964,9 +1995,16 @@ const EmployeePortal = () => {
                           <label className="block text-sm font-bold text-slate-700 mb-1">Job Description</label>
                           <textarea required rows={3} value={newJobDesc} onChange={(e) => setNewJobDesc(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500" placeholder="Briefly describe responsibilities..."></textarea>
                         </div>
-                        <button type="submit" className="w-full bg-sky-600 text-white py-3 rounded-lg font-bold hover:bg-sky-700 transition-colors">
-                          Post Job
-                        </button>
+                        <div className="flex gap-2">
+                          <button type="submit" className="w-full bg-sky-600 text-white py-3 rounded-lg font-bold hover:bg-sky-700 transition-colors">
+                            {editingJobId ? "Update Job" : "Post Job"}
+                          </button>
+                          {editingJobId && (
+                            <button type="button" onClick={handleCancelEdit} className="w-full bg-slate-200 text-slate-700 py-3 rounded-lg font-bold hover:bg-slate-300 transition-colors">
+                              Cancel
+                            </button>
+                          )}
+                        </div>
                       </form>
                     </div>
 
@@ -1986,7 +2024,10 @@ const EmployeePortal = () => {
                               <td className="p-4 font-bold text-slate-900">{job.title}</td>
                               <td className="p-4 text-slate-600 text-sm">{job.type} • {job.loc}</td>
                               <td className="p-4 text-green-600 font-bold">{job.pay}</td>
-                              <td className="p-4 text-right">
+                              <td className="p-4 text-right space-x-2 whitespace-nowrap">
+                                <button onClick={() => handleEditJobClick(job)} className="text-xs font-bold text-sky-600 hover:text-sky-800 bg-sky-50 px-3 py-1.5 rounded transition-colors">
+                                  Edit
+                                </button>
                                 <button onClick={() => handleDeleteJob(job.id)} className="text-xs font-bold text-red-600 hover:text-red-800 bg-red-50 px-3 py-1.5 rounded transition-colors">
                                   Delete
                                 </button>
